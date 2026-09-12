@@ -623,3 +623,134 @@ UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLev
   ctx.fillText(`REROLL OFFERINGS  [${game.rerollTokens || 0}]`, button.x + button.w / 2, button.y + button.h / 2);
   ctx.restore();
 };
+
+/* TODO 14-16: weighted Joker rarity/recurrence and unified Luck curves. */
+
+const BALTTATO_UPGRADE_RARITY_WEIGHTS = {
+  COMMON: 1.0,
+  UNCOMMON: 0.65,
+  RARE: 0.35,
+  EPIC: 1.0
+};
+const BALTTATO_JOKER_OFFERING_CHANCE = 0.0075;
+const BALTTATO_EXTRA_CHOICE_CAP = 0.5;
+const BALTTATO_LUCK_CURVE_RATE = 0.2;
+
+balttatoLuckCurve = function(luck, cap = 1) {
+  return cap * (1 - Math.exp(-BALTTATO_LUCK_CURVE_RATE * Math.max(0, Number(luck) || 0)));
+};
+
+function balttatoUpgradeWeight(upgrade) {
+  return BALTTATO_UPGRADE_RARITY_WEIGHTS[upgrade.tierName] || 1;
+}
+
+function balttatoWeightedUpgradePick(pool) {
+  let totalWeight = 0;
+  for (let i = 0; i < pool.length; i++) {
+    totalWeight += balttatoUpgradeWeight(pool[i]);
+  }
+
+  if (totalWeight <= 0) return pool[0];
+
+  let roll = Math.random() * totalWeight;
+  for (let i = 0; i < pool.length; i++) {
+    roll -= balttatoUpgradeWeight(pool[i]);
+    if (roll <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+function balttatoExtraChoiceChance(player) {
+  return balttatoLuckCurve(player ? player.luck : 0, BALTTATO_EXTRA_CHOICE_CAP);
+}
+
+const balttatoOriginalGenerateOfferingsProgression = UpgradeManager.prototype.generateOfferings;
+UpgradeManager.prototype.generateOfferings = function(forceJoker = false, player = null) {
+  const choiceCount = 3 + (player && Math.random() < balttatoExtraChoiceChance(player) ? 1 : 0);
+  const pool = [...this.upgradeCatalog];
+  const offerings = [];
+
+  while (pool.length > 0 && offerings.length < choiceCount) {
+    const chosen = balttatoWeightedUpgradePick(pool);
+    offerings.push(chosen);
+    const chosenIndex = pool.indexOf(chosen);
+    if (chosenIndex >= 0) pool.splice(chosenIndex, 1);
+  }
+
+  this.activeCards = offerings;
+
+  const shouldSpawnJoker = forceJoker || Math.random() < BALTTATO_JOKER_OFFERING_CHANCE;
+  if (shouldSpawnJoker && this.jokerCatalog.length > 0) {
+    // Jokers deliberately draw from the complete catalog every time so a Joker
+    // can recur later in the same run rather than becoming permanently exhausted.
+    const chosenJoker = this.jokerCatalog[Math.floor(Math.random() * this.jokerCatalog.length)];
+    const slot = Math.floor(Math.random() * this.activeCards.length);
+    this.activeCards[slot] = { ...chosenJoker };
+    logDebug(1, "Balatro Joker offering generated", {
+      joker: chosenJoker.title,
+      chance: BALTTATO_JOKER_OFFERING_CHANCE,
+      slot
+    });
+  }
+
+  this.hoveredCardIndex = -1;
+
+  logDebug(1, "Brotato-style upgrade offerings generated", {
+    choices: this.activeCards.map(c => c.title),
+    choiceCount: this.activeCards.length,
+    extraChoiceChance: player ? balttatoExtraChoiceChance(player) : 0
+  });
+
+  return this.activeCards;
+};
+
+const balttatoOriginalGetCardLayoutProgression = UpgradeManager.prototype.getCardLayout;
+UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
+  const count = Math.max(3, this.activeCards.length || 3);
+  if (count <= 3) return balttatoOriginalGetCardLayoutProgression.call(this, canvasW, canvasH);
+
+  const cardW = 170;
+  const cardH = 245;
+  const gap = 12;
+  const totalW = cardW * count + gap * (count - 1);
+  const startX = (canvasW - totalW) / 2;
+  const startY = canvasH / 2 - 85;
+
+  const rects = [];
+  for (let i = 0; i < count; i++) {
+    rects.push({
+      x: startX + i * (cardW + gap),
+      y: startY,
+      w: cardW,
+      h: cardH
+    });
+  }
+  return rects;
+};
+
+const balttatoOriginalTriggerLevelUpProgression = GameManager.prototype.triggerLevelUp;
+GameManager.prototype.triggerLevelUp = function() {
+  this.state = "LEVEL_UP";
+  this.upgradeManager.generateOfferings(false, this.player);
+  logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+    level: this.playerLevel,
+    currentXp: this.currentXp,
+    threshold: this.xpThreshold,
+    choices: this.upgradeManager.activeCards.length
+  });
+};
+
+const balttatoOriginalRerollOfferingsProgression = GameManager.prototype.rerollOfferings;
+GameManager.prototype.rerollOfferings = function() {
+  if (this.state !== "LEVEL_UP" || this.cardBurn.active || (this.rerollTokens || 0) <= 0) return false;
+  this.rerollTokens -= 1;
+  this.upgradeManager.generateOfferings(false, this.player);
+  this.rerollButtonHover = false;
+  logDebug(1, "Upgrade offerings rerolled", { rerollTokens: this.rerollTokens, choices: this.upgradeManager.activeCards.length });
+  return true;
+};
+
+const balttatoOriginalSelectUpgradeByIndexProgression = GameManager.prototype.selectUpgradeByIndex;
+GameManager.prototype.selectUpgradeByIndex = function(index) {
+  return balttatoOriginalSelectUpgradeByIndexProgression.call(this, index);
+};
