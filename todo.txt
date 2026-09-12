@@ -14,9 +14,9 @@ P-1 - New features to sort
 - [DONE] bosses should drop a big chunk of exp, nearly a levels worth. 
 - [DONE] decrease the amount of exp per level and the level exp scaling so they happen more often, have boss spawns  every 5 levels instead
 - [DONE] randomize the location a boss spawns on screen ex which side they come in on
-- upgrades should be reworked. The upgrade should increase a relevant stat - luck, fragmentation, penetration, speed, movement, etc - and then the behaviours should be based off that speed. The individual upgrades should say waht stats they effect, and then the pause game screen should show a list of the player stats, and hovering over them should have a tooltip for the effects those stats do.
-- chance of joker spawnning should increase with luck stat
-- jokers collected, should be able to be sold from the joker tray (once the tray exists after getting the first joker). They should be able to bbe scrapped for rerol tokens.
+- [DONE] upgrades should be reworked. The upgrade should increase a relevant stat - luck, fragmentation, penetration, speed, movement, etc - and then the behaviours should be based off that speed. The individual upgrades should say waht stats they effect, and then the pause game screen should show a list of the player stats, and hovering over them should have a tooltip for the effects those stats do.
+- [DONE] chance of joker spawnning should increase with luck stat
+- [DONE] jokers collected, should be able to be sold from the joker tray (once the tray exists after getting the first joker). They should be able to bbe scrapped for rerol tokens.
 
 P0 — Critical gameplay fixes
 1. [DONE] Fix high-speed projectile tunneling: use swept collision / equivalent continuous collision detection so fast projectiles cannot skip over small enemies between frames.
