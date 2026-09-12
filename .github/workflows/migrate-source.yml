@@ -9,12 +9,16 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ !exists('src/template.html') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Split monolith into source files
         run: |
+          if [ -f src/template.html ]; then
+            echo "Source tree already exists; nothing to migrate."
+            exit 0
+          fi
+
           python3 <<'PY'
           from pathlib import Path
           import re
@@ -25,9 +29,8 @@ jobs:
 
           style_match = re.search(r'<style>(.*?)</style>', text, re.S)
           script_match = re.search(r'<script>(.*?)</script>', text, re.S)
-          body_match = re.search(r'<body>(.*?)</body>', text, re.S)
-          if not style_match or not script_match or not body_match:
-              raise SystemExit('Could not locate the single style/script/body blocks')
+          if not style_match or not script_match:
+              raise SystemExit('Could not locate the single style/script blocks')
 
           src = root / 'src'
           js_dir = src / 'js'
@@ -36,7 +39,7 @@ jobs:
           (src / 'styles.css').write_text(style_match.group(1).strip() + '\n', encoding='utf-8')
 
           js = script_match.group(1)
-          marker_re = re.compile(r'^\\s*/\\* ===== (src/js/[^ ]+\\.js) ===== \\*/\\s*$', re.M)
+          marker_re = re.compile(r'^\s*/\* ===== (src/js/[^ ]+\.js) ===== \*/\s*$', re.M)
           markers = list(marker_re.finditer(js))
 
           if not markers:
@@ -53,8 +56,8 @@ jobs:
                   if content:
                       (js_dir / filename).write_text(content + '\n', encoding='utf-8')
 
-          template = text[:style_match.start()] + '<style>\\n<!-- BUILD:STYLES -->\\n  </style>' + text[style_match.end():]
-          template = template.replace(script_match.group(0), '<script>\\n    <!-- BUILD:SCRIPT -->\\n  </script>')
+          template = text[:style_match.start()] + '<style>\n    <!-- BUILD:STYLES -->\n  </style>' + text[style_match.end():]
+          template = template.replace(script_match.group(0), '<script>\n    <!-- BUILD:SCRIPT -->\n  </script>')
           (src / 'template.html').write_text(template, encoding='utf-8')
           PY
 
