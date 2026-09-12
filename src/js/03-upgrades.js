@@ -335,22 +335,23 @@ class UpgradeManager {
        * Computes card bounding rectangles for canvas rendering and hit-testing.
        *
        * How to call:
-       *   const rects = upgradeMgr.getCardLayout(800, 600);
+       *   const rects = this.getCardLayout(800, 600);
        *
        * @param {number} canvasW - Canvas width.
        * @param {number} canvasH - Canvas height.
        * @returns {Array<{ x: number, y: number, w: number, h: number }>}
        */
       getCardLayout(canvasW, canvasH) {
-        const cardW = 210;
-        const cardH = 245;
-        const gap = 20;
-        const totalW = cardW * 3 + gap * 2;
+        const cardW = 180;
+        const cardH = 210;
+        const gap = 12;
+        const cardCount = Math.max(1, this.activeCards.length);
+        const totalW = cardW * cardCount + gap * (cardCount - 1);
         const startX = (canvasW - totalW) / 2;
-        const startY = canvasH / 2 - 85;
+        const startY = canvasH / 2 - 75;
 
         const rects = [];
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < cardCount; i++) {
           rects.push({
             x: startX + i * (cardW + gap),
             y: startY,
@@ -689,9 +690,9 @@ class UpgradeManager {
             ctx.shadowBlur = 0;
             ctx.shadowColor = "transparent";
 
-            // Keyboard shortcut pill [1], [2], [3] (carefully balanced without leaked save)
+            // Keyboard shortcut pill [1], [2], [3], [4]
             ctx.fillStyle = "#1e293b";
-            drawRoundedRect(ctx, r.x + 12, r.y + 12, 28, 20, 3);
+            drawRoundedRect(ctx, r.x + 10, r.y + 10, 28, 20, 3);
             ctx.fill();
             ctx.strokeStyle = "#475569";
             ctx.lineWidth = 1;
@@ -701,55 +702,63 @@ class UpgradeManager {
             ctx.fillStyle = "#f1f5f9";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText(`[${i + 1}]`, r.x + 26, r.y + 22);
+            ctx.fillText(`[${i + 1}]`, r.x + 24, r.y + 20);
 
             // Rarity tag
             ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
             ctx.textAlign = "right";
             ctx.fillStyle = card.rarityColor;
-            ctx.fillText(card.tierName, r.x + r.w - 12, r.y + 22);
+            ctx.fillText(card.tierName, r.x + r.w - 10, r.y + 20);
 
             // Card Title
-            ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
             ctx.textAlign = "center";
             ctx.fillStyle = "#ffffff";
-            ctx.fillText(card.title, r.x + r.w / 2, r.y + 70);
+            ctx.fillText(card.title, r.x + r.w / 2, r.y + 56);
 
             // Dividing line
             ctx.strokeStyle = "#1e293b";
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(r.x + 16, r.y + 92);
-            ctx.lineTo(r.x + r.w - 16, r.y + 92);
+            ctx.moveTo(r.x + 12, r.y + 76);
+            ctx.lineTo(r.x + r.w - 12, r.y + 76);
             ctx.stroke();
 
             // Description text
-            ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.font = "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
             ctx.fillStyle = "#cbd5e1";
             ctx.textAlign = "center";
 
             const words = card.description.split(" ");
             let line = "";
-            let lineY = r.y + 120;
+            let lineY = r.y + 98;
+            const buttonTop = r.y + r.h - 40;
+            let linesDrawn = 0;
 
             for (let wIdx = 0; wIdx < words.length; wIdx++) {
               const testLine = line + words[wIdx] + " ";
               const metrics = ctx.measureText(testLine);
-              if (metrics.width > r.w - 30 && wIdx > 0) {
-                ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+              if (metrics.width > r.w - 24 && wIdx > 0) {
+                if (lineY <= buttonTop - 12) {
+                  ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+                  linesDrawn += 1;
+                }
                 line = words[wIdx] + " ";
-                lineY += 18;
+                lineY += 15;
               } else {
                 line = testLine;
               }
             }
-            ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+            if (line && lineY <= buttonTop - 12) {
+              ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+              linesDrawn += 1;
+            }
 
             // Action button base: Glows with full rarity color when card is hovered
-            const btnW = r.w - 32;
-            const btnH = 30;
-            const btnX = r.x + 16;
-            const btnY = r.y + r.h - 42;
+            const btnW = r.w - 28;
+            const btnH = 28;
+            const btnX = r.x + 14;
+            const btnY = r.y + r.h - 34;
 
             ctx.save();
             if (isHovered) {
@@ -772,7 +781,7 @@ class UpgradeManager {
             }
             ctx.restore();
 
-            ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
             ctx.fillStyle = isHovered ? "#000000" : "#94a3b8";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -824,7 +833,7 @@ class UpgradeManager {
        * How to call:
        *   upgradeMgr.drawBalatroCanvasTooltip(ctx, card, 300, 150);
        *
-       * @param {CanvasRenderingContext2D} ctx - Canvas rendering context.
+       * @param {CanvasRenderingContext2D} ctx - CanvasRenderingContext2D context.
        * @param {Object} card - Balatro Joker card object.
        * @param {number} x - Left coordinate.
        * @param {number} y - Top coordinate.
