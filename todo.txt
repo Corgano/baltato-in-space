@@ -40,8 +40,8 @@ P2 — Progression and balance
    - Ensure Joker cards can appear again later in the same run rather than effectively disappearing after one appearance.
 15. [DONE] Add a Luck-based extra upgrade option: Luck should provide a diminishing-returns chance to show one additional choice when selecting an upgrade, starting from 0% and approaching a maximum 50% chance.
 16. [DONE] Review and balance all new Luck curves together so their diminishing-return behavior is consistent and early Luck ranks provide noticeably more benefit than later ranks near each cap.
-17. Increase the visible playing-field frame by roughly 20–30% so more of the surrounding action can be seen at once, while keeping the game usable across screen sizes.
-18. Rework enemy spawning so simultaneous enemy count increases over time (for example, beginning around 2–3 enemies at once). Clustered small enemies should spawn across a larger area, with both cluster size and spawn area increasing progressively over time.
+17. [DONE] Increase the visible playing-field frame by roughly 20–30% so more of the surrounding action can be seen at once, while keeping the game usable across screen sizes.
+18. [DONE] Rework enemy spawning so simultaneous enemy count increases over time (for example, beginning around 2–3 enemies at once). Clustered small enemies should spawn across a larger area, with both cluster size and spawn area increasing progressively over time.
 
 P3 — Presentation / polish
 19. Review the new health/boost HUD layout together with the enlarged playfield so the gauges remain easy to read without obscuring gameplay.
