@@ -1,0 +1,327 @@
+=== LINE COUNT ===
+5228 index.html
+
+=== FUNCTION / CLASS DECLARATIONS ===
+638:    function logDebug(level, message, data) {
+671:    function drawRoundedRect(ctx, x, y, w, h, r) {
+699:    function hexToRgba(hex, alpha) {
+769:    function drawJokerPixelArt(ctx, jokerId, x, y, w, h) {
+809:class Player {
+1104:    class Enemy {
+1377:    class BossEnemy extends Enemy {
+1683:    class Projectile {
+1920:    class EnemyProjectile {
+2014:    class LightningArc {
+2110:    class BlastEffect {
+2186:    class DroppedItem {
+2388:    class FloatingText {
+2462:class UpgradeManager {
+3390:class GameManager {
+5209:function bootGame() {
+
+=== KEYWORD OCCURRENCES ===
+10:  <meta name="description" content="A minimalist, single-file HTML5 arena survival game featuring auto-combat, level-up mechanics, and entity-managed movement. Version 1.4.0 with 4x scrolling world field, dynamic camera tracking, rebalanced projectile velocity, and color-decaying lucky XP gems." />
+576:     * 1. requestAnimationFrame loop with clamped delta-time calculations.
+611:     * Reference projectile speed used as the 1.0x baseline for speed-based
+612:     * damage scaling. Player.projectileSpeed starts at this value. Slower base
+615:    const BASE_PROJECTILE_SPEED = 340;
+618:     * Maximum distance a normal projectile can travel before it despawns.
+621:     * an enemy to shoot at). Once fired, a projectile flies until it leaves
+625:    const PROJECTILE_FLIGHT_RANGE = 2000;
+835:        this.damage = 32; // Base projectile kinetic damage
+836:        this.projectileSpeed = BASE_PROJECTILE_SPEED; // Projectile speed in pixels/sec (340)
+837:        this.weaponRange = 260; // Maximum targeting acquisition and projectile flight range in pixels
+838:        this.multishotCount = 1; // Number of projectiles fired per cycle
+839:        this.pierceCount = 0; // Number of enemies projectiles can pierce through
+849:        this.lifeLeechChance = 0.0; // Chance on enemy kill to restore HP
+873:          projectileSpeed: this.projectileSpeed,
+898:        this.projectileSpeed = BASE_PROJECTILE_SPEED;
+927:       *   player.update(dt, activeKeysSet, 800, 600);
+935:      update(dt, activeKeys, arenaWidth, arenaHeight) {
+1025:       *   player.draw(ctx);
+1030:      draw(ctx) {
+1098:     * Class: Enemy
+1104:    class Enemy {
+1106:       * Constructs a new Enemy instance with archetype attributes.
+1109:       *   const chaser = new Enemy(x, y, 12, 90, 30, "#f43f5e", "chaser");
+1110:       *   const swarmer = new Enemy(x, y, 8, 145, 16, "#ec4899", "swarmer");
+1111:       *   const shooter = new Enemy(x, y, 14, 65, 48, "#a855f7", "shooter");
+1112:       *   const heavy = new Enemy(x, y, 20, 52, 130, "#f97316", "heavy");
+1116:       * @param {number} radius - Collision radius.
+1120:       * @param {string} enemyType - Archetype: "chaser", "swarmer", "shooter", "heavy", or "boss".
+1122:      constructor(x, y, radius = 12, speed = 90, health = 30, color = "#f43f5e", enemyType = "chaser") {
+1130:        this.enemyType = enemyType;
+1144:        logDebug(3, "Enemy initialized", {
+1145:          type: this.enemyType,
+1154:       * Advances enemy position directly toward target coordinates using unit vectors.
+1158:       *   enemy.update(dt, player.x, player.y, enemyProjectiles);
+1163:       * @param {EnemyProjectile[]} [enemyProjectiles] - Array to push fired hostile bullets into.
+1166:      update(dt, targetX, targetY, enemyProjectiles) {
+1175:          if (this.enemyType === "shooter") {
+1192:            if (this.fireTimer <= 0 && enemyProjectiles) {
+1197:              enemyProjectiles.push(new EnemyProjectile(this.x, this.y, bvx, bvy, 5, 12, "#c084fc"));
+1198:              logDebug(3, "Shooter enemy discharged plasma bolt", { x: this.x.toFixed(1), y: this.y.toFixed(1) });
+1216:       * Inflicts damage onto enemy and triggers visual flash.
+1217:       * Returns boolean indicating if damage brought enemy health to zero.
+1220:       *   const killed = enemy.takeDamage(25);
+1223:       * @returns {boolean} True if enemy health reaches zero (killed).
+1229:        logDebug(3, "Enemy took damage", {
+1235:          logDebug(2, "Enemy neutralized", { isBoss: this.isBoss, type: this.enemyType });
+1242:       * Renders enemy geometry and overhead health bar.
+1245:       *   enemy.draw(ctx);
+1250:      draw(ctx) {
+1261:        if (this.enemyType === "swarmer") {
+1271:        } else if (this.enemyType === "shooter") {
+1299:        } else if (this.enemyType === "heavy") {
+1368:     * Class: BossEnemy
+1377:    class BossEnemy extends Enemy {
+1379:       * Constructs an escalating Boss enemy instance.
+1382:       *   const boss = new BossEnemy(x, y, tier, arenaWidth, arenaHeight);
+1440:       * Updates boss state machine, charge phases, projectile attacks,
+1444:       *   boss.update(dt, player.x, player.y, enemyProjectilesList);
+1449:       * @param {Array<EnemyProjectile>} enemyProjectiles - Projectile collection.
+1452:      update(dt, targetX, targetY, enemyProjectiles) {
+1517:          this.fireRadialBurst(enemyProjectiles);
+1524:          this.fireAimedCluster(targetX, targetY, enemyProjectiles);
+1536:       * Dispatches a radial ring of hazardous projectiles across 360 degrees.
+1539:       *   boss.fireRadialBurst(enemyProjectiles);
+1541:       * @param {Array<EnemyProjectile>} enemyProjectiles - Array to populate.
+1544:      fireRadialBurst(enemyProjectiles) {
+1554:          const bullet = new EnemyProjectile(this.x, this.y, vx, vy, 5, 12, "#ec4899");
+1555:          enemyProjectiles.push(bullet);
+1565:       *   boss.fireAimedCluster(playerX, playerY, enemyProjectiles);
+1569:       * @param {Array<EnemyProjectile>} enemyProjectiles - Array to populate.
+1572:      fireAimedCluster(targetX, targetY, enemyProjectiles) {
+1583:          const bullet = new EnemyProjectile(this.x, this.y, vx, vy, 5.5, 15, "#f43f5e");
+1584:          enemyProjectiles.push(bullet);
+1594:       *   boss.draw(ctx);
+1599:      draw(ctx) {
+1677:     * Class: Projectile
+1679:     * Represents a projectile dispatched by the player's weapon systems.
+1683:    class Projectile {
+1685:       * Constructs a new Projectile instance.
+1688:       *   const proj = new Projectile(x, y, vx, vy, 4.5, 32, 0, "#fbbf24", false, 1, false, 45, 0);
+1694:       * @param {number} radius - Collision radius.
+1703:       * @param {number} maxRange - Maximum flight distance before projectile expires.
+1740:        this.isFragment = false; // Whether this projectile is a kinetic shrapnel shard
+1745:        this.twin = null; // Pointer to entangled twin projectile
+1750:       * Advances projectile coordinates by velocity vector scaled by dt, tracks distance traveled,
+1754:       *   proj.update(dt, 800, 600);
+1761:      update(dt, arenaWidth = 800, arenaHeight = 600) {
+1778:        // Terminate projectile flight once maximum weapon range threshold is crossed
+1781:          logDebug(4, "Projectile expired upon reaching maximum range", {
+1788:        // Execute kinetic ricochet bounce if projectile carries ricochet charges
+1796:            logDebug(3, "Projectile ricochet off left boundary", { remaining: this.ricochetRemaining });
+1802:            logDebug(3, "Projectile ricochet off right boundary", { remaining: this.ricochetRemaining });
+1810:            logDebug(3, "Projectile ricochet off top boundary", { remaining: this.ricochetRemaining });
+1816:            logDebug(3, "Projectile ricochet off bottom boundary", { remaining: this.ricochetRemaining });
+1827:       * Tests if projectile has traversed beyond arena margin limits.
+1847:       * Renders projectile core, incandescent head, and distance-based dissipation.
+1850:       *   proj.draw(ctx);
+1855:      draw(ctx) {
+1858:        // Smooth dissipation when projectile approaches its terminal range limit
+1886:        // Core projectile body
+1914:     * Class: EnemyProjectile
+1916:     * Hazardous projectile fired by Boss entities that travels across the arena
+1917:     * and damages the player vessel on collision.
+1920:    class EnemyProjectile {
+1922:       * Constructs a new EnemyProjectile instance.
+1925:       *   const eBullet = new EnemyProjectile(x, y, vx, vy, 5, 12, "#ec4899");
+1931:       * @param {number} radius - Collision radius.
+1947:       * Advances enemy projectile by its velocity.
+1950:       *   eBullet.update(dt);
+1955:      update(dt) {
+1984:       *   eBullet.draw(ctx);
+1989:      draw(ctx) {
+2064:       *   arc.update(dt);
+2069:      update(dt) {
+2080:       *   arc.draw(ctx);
+2085:      draw(ctx) {
+2139:       *   blast.update(dt);
+2144:      update(dt) {
+2155:       *   blast.draw(ctx);
+2160:      draw(ctx) {
+2244:       *   item.update(dt, player.x, player.y, player.magnetRadius);
+2252:      update(dt, playerX, playerY, magnetRadius) {
+2288:       *   item.draw(ctx);
+2293:      draw(ctx) {
+2416:       *   text.update(dt);
+2421:      update(dt) {
+2433:       *   text.draw(ctx);
+2438:      draw(ctx) {
+2476:            description: "Projectiles discharge electric arcs chaining to +1 nearby hostile",
+2487:            description: "Adds +1 additional projectile per firing cycle in spread",
+2509:            description: "Projectiles bounce off screen arena perimeter walls +1 time",
+2520:            description: "Projectiles detonate on impact with a 45px area shockwave blast",
+2532:            description: "15% chance on enemy defeat to restore +8 hull integrity",
+2554:            description: "Increases projectile kinetic damage by +12",
+2565:            description: "Projectiles pierce through +1 additional hostile",
+2649:            description: "Increases projectile flight speed by +20% (faster impacts hit harder)",
+2651:              player.projectileSpeed = Math.round(player.projectileSpeed * 1.20);
+2652:              logDebug(1, "Upgrade applied: ACCELERATOR COILS", { projectileSpeed: player.projectileSpeed });
+2660:            description: "Increases projectile speed by +35% and extends targeting range (+18% base range scaling toward soft cap)",
+2662:              player.projectileSpeed = Math.round(player.projectileSpeed * 1.35);
+2666:              logDebug(1, "Upgrade applied: HYPERVELOCITY CORES", { projectileSpeed: player.projectileSpeed, weaponRange: player.weaponRange });
+2685:            description: "Projectiles shatter into +2 fragmentation shards on final impact; shard spread and pierce chance scale with impact speed",
+2696:            description: "Projectiles shatter into +3 shards with +15% increased shard velocity and pierce chance",
+2699:              player.projectileSpeed = Math.round(player.projectileSpeed * 1.15);
+2700:              logDebug(1, "Upgrade applied: CLUSTER MUNITIONS", { fragmentation: player.fragmentation, projectileSpeed: player.projectileSpeed });
+2731:            description: "Doubles projectile count with entangled pairs. When one hits, 50% chance to be real; the fake collapses while the other continues.",
+3357:          ctx.fillText("• Projectiles launch at 1/3 base velocity", drawX + 14, drawY + 110);
+3363:          ctx.fillText("• Doubles projectiles into quantum pairs", drawX + 14, drawY + 110);
+3379:     * - Delta time measurement via requestAnimationFrame
+3380:     * - Distinct entity arrays (projectiles, enemyProjectiles, enemies, droppedItems, floatingTexts)
+3415:        this.projectiles = [];
+3416:        this.enemyProjectiles = [];
+3432:        // Enemy spawner parameters
+3435:        this.enemySpeedBase = 90;
+3521:       * Pauses active combat simulation and opens the Brotato-style upgrade selection overlay.
+3531:        logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+3557:        this.animationFrameId = requestAnimationFrame((ts) => this.gameLoop(ts));
+3864:        this.enemySpeedBase += 3; // Gradual difficulty ramping
+3908:       * Spawns an escalating BossEnemy at the perimeter of the arena.
+3918:        const boss = new BossEnemy(this.width / 2, -50, tier, this.width, this.height);
+3938:        this.projectiles = [];
+3939:        this.enemyProjectiles = [];
+3952:        this.enemySpeedBase = 90;
+4000:       * Finds the closest enemy to the player using Euclidean vector calculations,
+4004:       *   const target = this.findNearestEnemy(this.player.weaponRange);
+4005:       *   if (target.enemy) { ... }
+4008:       * @returns {{ enemy: Enemy|null, distance: number, unitX: number, unitY: number }}
+4010:      findNearestEnemy(maxRange = Infinity) {
+4012:          return { enemy: null, distance: Infinity, unitX: 0, unitY: 0 };
+4015:        let nearestEnemy = null;
+4021:          const enemy = this.enemies[i];
+4022:          if (enemy.isDestroyed) continue;
+4024:          const dx = enemy.x - this.player.x;
+4025:          const dy = enemy.y - this.player.y;
+4030:            nearestEnemy = enemy;
+4036:        if (!nearestEnemy) {
+4037:          return { enemy: null, distance: Infinity, unitX: 0, unitY: 0 };
+4044:        return { enemy: nearestEnemy, distance, unitX, unitY };
+4048:       * Auto-combat logic: Automatically fires projectiles targeting the nearest enemy
+4063:          const target = this.findNearestEnemy(this.player.weaponRange);
+4064:          if (target.enemy !== null) {
+4078:              const spawnProjectile = (angleOffset = 0) => {
+4080:                let vx = Math.cos(finalAngle) * this.player.projectileSpeed;
+4081:                let vy = Math.sin(finalAngle) * this.player.projectileSpeed;
+4083:                const projectile = new Projectile(
+4100:                  PROJECTILE_FLIGHT_RANGE
+4104:                // accelerates in flight (see Projectile.update/draw).
+4106:                  projectile.hasSnailMail = true;
+4107:                  projectile.vx /= 3;
+4108:                  projectile.vy /= 3;
+4111:                return projectile;
+4117:                // The first of the pair to hit an enemy collapses the state:
+4122:                const twinA = spawnProjectile(jitterA);
+4123:                const twinB = spawnProjectile(jitterB);
+4129:                this.projectiles.push(twinA, twinB);
+4131:                this.projectiles.push(spawnProjectile(0));
+4139:              targetCoord: { x: target.enemy.x.toFixed(1), y: target.enemy.y.toFixed(1) }
+4188:          // Determine enemy archetype based on player level and weighted probabilities
+4209:              const swarmerSpeed = this.enemySpeedBase * 1.5 + (Math.random() - 0.5) * 20;
+4211:              const swarmer = new Enemy(sx, sy, 8, swarmerSpeed, swarmerHp, "#ec4899", "swarmer");
+4217:            const shooterSpeed = Math.max(55, this.enemySpeedBase * 0.75 + (Math.random() - 0.5) * 15);
+4219:            const shooter = new Enemy(x, y, 14, shooterSpeed, shooterHp, "#a855f7", "shooter");
+4224:            const heavySpeed = Math.max(45, this.enemySpeedBase * 0.55);
+4226:            const heavy = new Enemy(x, y, 20, heavySpeed, heavyHp, "#f97316", "heavy");
+4231:            const enemySpeed = this.enemySpeedBase + (Math.random() - 0.5) * 20;
+4232:            const enemyHp = 25 + this.playerLevel * 5;
+4233:            const enemy = new Enemy(x, y, 12, enemySpeed, enemyHp, "#f43f5e", "chaser");
+4234:            this.enemies.push(enemy);
+4241:       * Handles enemy defeat, score calculation, dropped items, and nanite leech.
+4245:       *   this.handleEnemyDefeat(enemy);
+4247:       * @param {Enemy} enemy - The destroyed enemy instance.
+4250:      handleEnemyDefeat(enemy) {
+4251:        if (enemy.hasDroppedLoot) return;
+4252:        enemy.hasDroppedLoot = true;
+4253:        enemy.isDestroyed = true;
+4267:        const dropX = Math.max(20, Math.min(this.width - 20, enemy.x));
+4268:        const dropY = Math.max(20, Math.min(this.height - 20, enemy.y));
+4270:        if (enemy.isBoss) {
+4271:          this.totalScore += 1200 * enemy.tier;
+4277:          logDebug(1, "BOSS DEFEATED! Boss Cache dropped", { name: enemy.name, dropX, dropY });
+4285:          if (enemy.enemyType === "swarmer") {
+4290:          } else if (enemy.enemyType === "shooter") {
+4295:          } else if (enemy.enemyType === "heavy") {
+4332:            logDebug(2, "Lucky XP node dropped by enemy (5x multiplier)", {
+4342:            logDebug(2, "XP square dropped by defeated enemy", { dropX, dropY, xpValue });
+4348:       * Shatters a spent projectile into kinetic fragmentation shards on its
+4356:       *  - Shards have a base 25% chance to pierce through an enemy, rising
+4365:       * @param {Projectile} proj - The projectile that just made its final impact.
+4366:       * @param {number} hitDamage - The damage that projectile just dealt (post speed-scaling).
+4367:       * @param {number} impactSpeed - The projectile's velocity magnitude at impact.
+4403:          const shard = new Projectile(
+4420:          // Fragments don't re-hit the enemy they were born from on the same frame.
+4422:          this.projectiles.push(shard);
+4429:       * Executes collision evaluations between all active entities.
+4432:       *   this.checkCollisions();
+4436:      checkCollisions() {
+4437:        // 1. Player Projectiles vs Enemies
+4438:        for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
+4439:          const proj = this.projectiles[pIdx];
+4443:            const enemy = this.enemies[eIdx];
+4444:            if (enemy.isDestroyed || proj.hitEntities.has(enemy)) continue;
+4446:            const dist = Math.hypot(proj.x - enemy.x, proj.y - enemy.y);
+4447:            if (dist < proj.radius + enemy.radius) {
+4448:              proj.hitEntities.add(enemy);
+4469:                  // an ordinary projectile from this point forward.
+4482:              // Projectile Speed stat); the Snail Mail Joker gets a much
+4486:              const speedRatio = impactSpeed / BASE_PROJECTILE_SPEED;
+4496:              const isKilled = enemy.takeDamage(effectiveDamage);
+4500:                new FloatingText(enemy.x, enemy.y - 12, `${effectiveDamage}`, proj.isCrit ? "#f59e0b" : "#ffffff", 0.6)
+4505:                this.blastEffects.push(new BlastEffect(enemy.x, enemy.y, proj.blastRadius, "#f59e0b", 0.3));
+4508:                  if (splashTarget !== enemy && !splashTarget.isDestroyed) {
+4509:                    const splashDist = Math.hypot(splashTarget.x - enemy.x, splashTarget.y - enemy.y);
+4517:                        this.handleEnemyDefeat(splashTarget);
+4526:                let currentTarget = enemy;
+4554:                      this.handleEnemyDefeat(closestChainTarget);
+4564:                this.handleEnemyDefeat(enemy);
+4570:                logDebug(3, "Projectile pierced through enemy", { remaining: proj.pierceRemaining });
+4575:                // used up), a projectile with fragmentation > 0 shatters into
+4587:        // 2. Enemy Projectiles vs Player
+4588:        for (let epIdx = 0; epIdx < this.enemyProjectiles.length; epIdx++) {
+4589:          const bullet = this.enemyProjectiles[epIdx];
+4611:          const enemy = this.enemies[eIdx];
+4612:          if (enemy.isDestroyed) continue;
+4614:          const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+4615:          if (dist < enemy.radius + this.player.radius) {
+4616:            const hitDamage = enemy.isBoss ? 28 : 16;
+4680:        // Player Projectiles
+4681:        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+4682:          const p = this.projectiles[i];
+4684:            this.projectiles.splice(i, 1);
+4688:        // Enemy Projectiles
+4689:        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+4690:          const ep = this.enemyProjectiles[i];
+4692:            this.enemyProjectiles.splice(i, 1);
+4755:        this.player.update(dt, this.activeKeys, this.width, this.height);
+4757:        for (let i = 0; i < this.projectiles.length; i++) {
+4758:          this.projectiles[i].update(dt, this.width, this.height);
+4761:        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+4762:          this.enemyProjectiles[i].update(dt);
+4766:          const enemy = this.enemies[i];
+4767:          enemy.update(dt, this.player.x, this.player.y, this.enemyProjectiles);
+4771:          this.droppedItems[i].update(dt, this.player.x, this.player.y, this.player.magnetRadius);
+4775:          this.floatingTexts[i].update(dt);
+4779:          this.lightningArcs[i].update(dt);
+4783:          this.blastEffects[i].update(dt);
+4965:        const target = this.findNearestEnemy(this.player.weaponRange);
+4966:        if (target.enemy !== null) {
+4971:          this.ctx.lineTo(target.enemy.x, target.enemy.y);
+4978:          this.ctx.arc(target.enemy.x, target.enemy.y, target.enemy.radius + 6, 0, Math.PI * 2);
+5110:       * The stable requestAnimationFrame game loop.
+5114:       *   this.gameLoop(timestamp);
+5119:      gameLoop(currentTimestamp) {
+5140:          this.checkCollisions();
+5146:          this.droppedItems[i].draw(this.ctx);
+5151:        for (let i = 0; i < this.projectiles.length; i++) {
+5152:          this.projectiles[i].draw(this.ctx);
+5156:          this.blastEffects[i].draw(this.ctx);
+5160:          this.lightningArcs[i].draw(this.ctx);
+5163:        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+5164:          this.enemyProjectiles[i].draw(this.ctx);
+5168:          this.enemies[i].draw(this.ctx);
+5171:        this.player.draw(this.ctx);
+5174:          this.floatingTexts[i].draw(this.ctx);
+5195:        this.animationFrameId = requestAnimationFrame((ts) => this.gameLoop(ts));
