@@ -1807,6 +1807,33 @@ class GameManager {
       }
     }
 
+/* INTEGRATED: GameManager patches moved from UpgradeManager source */
+const balttatoOriginalTriggerLevelUpProgression = GameManager.prototype.triggerLevelUp;
+GameManager.prototype.triggerLevelUp = function() {
+  this.state = "LEVEL_UP";
+  this.upgradeManager.generateOfferings(false, this.player);
+  logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+    level: this.playerLevel,
+    currentXp: this.currentXp,
+    threshold: this.xpThreshold,
+    choices: this.upgradeManager.activeCards.length
+  });
+};
+const balttatoOriginalRerollOfferingsProgression = GameManager.prototype.rerollOfferings;
+GameManager.prototype.rerollOfferings = function() {
+  if (this.state !== "LEVEL_UP" || this.cardBurn.active || (this.rerollTokens || 0) <= 0) return false;
+  this.rerollTokens -= 1;
+  this.upgradeManager.generateOfferings(false, this.player);
+  this.rerollButtonHover = false;
+  logDebug(1, "Upgrade offerings rerolled", { rerollTokens: this.rerollTokens, choices: this.upgradeManager.activeCards.length });
+  return true;
+};
+const balttatoOriginalSelectUpgradeByIndexProgression = GameManager.prototype.selectUpgradeByIndex;
+GameManager.prototype.selectUpgradeByIndex = function(index) {
+  return balttatoOriginalSelectUpgradeByIndexProgression.call(this, index);
+};
+
+
     /**
      * Initializes the canvas application and verifies DOM ready state.
      *
