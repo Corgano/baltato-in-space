@@ -13,8 +13,8 @@ class GameManager {
         this.ctx = canvas.getContext("2d");
 
         // Logical game coordinate dimensions
-        this.width = 800;
-        this.height = 600;
+        this.width = 1000;
+        this.height = 750;
 
         // State Machine: 'PLAYING', 'LEVEL_UP', 'GAME_OVER'
         this.state = "PLAYING";
