@@ -1,0 +1,48 @@
+BALTTATO IN SPACE — TODO
+
+Priorities:
+P0 = critical bugs / core playability
+P1 = core gameplay systems
+P2 = balance / progression
+P3 = presentation / polish
+
+P0 — Critical gameplay fixes
+1. Fix high-speed projectile tunneling: use swept collision / equivalent continuous collision detection so fast projectiles cannot skip over small enemies between frames.
+2. Fix collision-enemy interactions: small enemies that damage the player by contact must remain hittable while overlapping the player, and a successful contact attack must also destroy the attacking enemy.
+3. Add a proper pause screen toggled by ESC. Pausing must stop gameplay simulation and display the player's current run statistics.
+4. Expand the playable field and camera system: the world should be 4x the canvas area, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 10 px beyond the field.
+
+P1 — Core gameplay systems
+5. Add a player boost system and Boost upgrade:
+   - Add a boost resource/value that starts at 0.
+   - The boost meter is hidden while boost is 0 and appears when boost is available.
+   - Holding SHIFT while moving consumes boost.
+   - Boost movement speed should be about +100% over normal movement speed.
+   - Boost upgrades increase the player's available boost capacity/amount.
+6. Add health and boost meters to the upper-left HUD. Health should be a visual gauge; the boost gauge should use a distinct color (blue suggested) and only appear when boost is available.
+7. Improve enemy projectile readability: all enemy bullets should be red or pink, and higher-damage bullets should be visibly larger or otherwise clearly marked as more dangerous.
+8. Replace the boss charge telegraph's effectively fixed long line with a telegraph that clearly indicates the actual charge distance the boss intends to travel.
+9. Make the explosion/shockwave effect capable of hitting large enemies multiple times as the expanding wave passes through them, rather than limiting each enemy to a single hit when appropriate.
+10. Add explosion-chain behavior: enemies killed by explosions can trigger additional explosions. The chance should depend on both Luck and the number of Explosion/Plasma Warhead ranks, with roughly 10 Explosion ranks reaching a 50% base chance and Luck eventually allowing the chance to reach 100%.
+11. Add fragmentation-on-penetration synergy: when both Fragmentation and Penetration are owned, penetrating projectiles can spawn fragmentation shards while passing through enemies. Limit the number of spawned fragments to the player's Fragmentation level. The per-fragment spawn chance should curve from 5% toward a 75% cap and scale with Luck using diminishing returns.
+12. Add chain-lightning penetration synergy: when a chain-lightning projectile also has penetration, give it a 10% base chance to arc onward, scaling toward a 75% cap with Luck using diminishing returns.
+13. Add reroll tokens:
+   - Every boss death guarantees 1 reroll token.
+   - Normal enemies can rarely drop reroll tokens, starting at 0.5%.
+   - Luck increases normal-enemy drop chance up to a maximum of 5%.
+   - Boss reroll drops are guaranteed, with Luck providing the additional/secondary chance component as specified, capped at 25%.
+   - Reroll tokens allow the player to reroll the currently offered level-up bonuses.
+
+P2 — Progression and balance
+14. Rebalance Balatro/Joker card appearance and recurrence:
+   - Make Jokers more common than their current 1-in-200 offering rate.
+   - Keep them rarer than the rarest normal upgrade; target roughly one-tenth of that rarest upgrade's spawn rate.
+   - Ensure Joker cards can appear again later in the same run rather than effectively disappearing after one appearance.
+15. Add a Luck-based extra upgrade option: Luck should provide a diminishing-returns chance to show one additional choice when selecting an upgrade, starting from 0% and approaching a maximum 50% chance.
+16. Review and balance all new Luck curves together so their diminishing-return behavior is consistent and early Luck ranks provide noticeably more benefit than later ranks near each cap.
+17. Increase the visible playing-field frame by roughly 20–30% so more of the surrounding action can be seen at once, while keeping the game usable across screen sizes.
+18. Rework enemy spawning so simultaneous enemy count increases over time (for example, beginning around 2–3 enemies at once). Clustered small enemies should spawn across a larger area, with both cluster size and spawn area increasing progressively over time.
+
+P3 — Presentation / polish
+19. Review the new health/boost HUD layout together with the enlarged playfield so the gauges remain easy to read without obscuring gameplay.
+20. Review boss charge, enemy bullet, explosion, fragmentation, chain-lightning, and reroll visuals together after the mechanics are implemented so each mechanic has a distinct and readable visual indicator.
