@@ -8,11 +8,11 @@ P2 = balance / progression
 P3 = presentation / polish
 
 P-1 - New features to sort
-- decrease game map size to 1.5x the frame size. It should scale slowly with level, ex 1% extra size per level. The camera should be able to pan up to 20px off the edge.
+- [DONE] decrease game map size to 1.5x the frame size. It should scale slowly with level, ex 1% extra size per level. The camera should be able to pan up to 20px off the edge.
 - [DONE] enemies that produce projectiles towards the palyer should have a maximum range they start doing so from, so they just move towards the player if they are not close enough. Enemies that do not direct their projectiles at the player can do so from far away
-- enemy xp should scale up with their health, so harder enemies on later levels also drop exp
-- bosses should drop a big chunk of exp, nearly a levels worth. 
-- decrease the amount of exp per level and the level exp scaling so they happen more often, have boss spawns  every 5 levels instead
+- [DONE] enemy xp should scale up with their health, so harder enemies on later levels also drop exp
+- [DONE] bosses should drop a big chunk of exp, nearly a levels worth. 
+- [DONE] decrease the amount of exp per level and the level exp scaling so they happen more often, have boss spawns  every 5 levels instead
 - [DONE] randomize the location a boss spawns on screen ex which side they come in on
 - upgrades should be reworked. The upgrade should increase a relevant stat - luck, fragmentation, penetration, speed, movement, etc - and then the behaviours should be based off that speed. The individual upgrades should say waht stats they effect, and then the pause game screen should show a list of the player stats, and hovering over them should have a tooltip for the effects those stats do.
 - chance of joker spawnning should increase with luck stat
@@ -57,4 +57,4 @@ P2 — Progression and balance
 
 P3 — Presentation / polish
 19. [DONE] Review the new health/boost HUD layout together with the enlarged playfield so the gauges remain easy to read without obscuring gameplay.
-20. Review boss charge, enemy bullet, explosion, fragmentation, chain-lightning, and reroll visuals together after the mechanics are implemented so each mechanic has a distinct and readable visual indicator.
+20. [DONE] Review boss charge, enemy bullet, explosion, fragmentation, chain-lightning, and reroll visuals together after the mechanics are implemented so each mechanic has a distinct and readable visual indicator.
