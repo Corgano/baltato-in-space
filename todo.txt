@@ -22,11 +22,11 @@ P1 — Core gameplay systems
 6. Add health and boost meters to the upper-left HUD. Health should be a visual gauge; the boost gauge should use a distinct color (blue suggested) and only appear when boost is available.
 7. Improve enemy projectile readability: all enemy bullets should be red or pink, and higher-damage bullets should be visibly larger or otherwise clearly marked as more dangerous.
 8. Replace the boss charge telegraph's effectively fixed long line with a telegraph that clearly indicates the actual charge distance the boss intends to travel.
-9. Make the explosion/shockwave effect capable of hitting large enemies multiple times as the expanding wave passes through them, rather than limiting each enemy to a single hit when appropriate.
-10. Add explosion-chain behavior: enemies killed by explosions can trigger additional explosions. The chance should depend on both Luck and the number of Explosion/Plasma Warhead ranks, with roughly 10 Explosion ranks reaching a 50% base chance and Luck eventually allowing the chance to reach 100%.
-11. Add fragmentation-on-penetration synergy: when both Fragmentation and Penetration are owned, penetrating projectiles can spawn fragmentation shards while passing through enemies. Limit the number of spawned fragments to the player's Fragmentation level. The per-fragment spawn chance should curve from 5% toward a 75% cap and scale with Luck using diminishing returns.
-12. Add chain-lightning penetration synergy: when a chain-lightning projectile also has penetration, give it a 10% base chance to arc onward, scaling toward a 75% cap with Luck using diminishing returns.
-13. Add reroll tokens:
+9. [DONE] Make the explosion/shockwave effect capable of hitting large enemies multiple times as the expanding wave passes through them, rather than limiting each enemy to a single hit when appropriate.
+10. [DONE] Add explosion-chain behavior: enemies killed by explosions can trigger additional explosions. The chance should depend on both Luck and the number of Explosion/Plasma Warhead ranks, with roughly 10 Explosion ranks reaching a 50% base chance and Luck eventually allowing the chance to reach 100%.
+11. [DONE] Add fragmentation-on-penetration synergy: when both Fragmentation and Penetration are owned, penetrating projectiles can spawn fragmentation shards while passing through enemies. Limit the number of spawned fragments to the player's Fragmentation level. The per-fragment spawn chance should curve from 5% toward a 75% cap and scale with Luck using diminishing returns.
+12. [DONE] Add chain-lightning penetration synergy: when a chain-lightning projectile also has penetration, give it a 10% base chance to arc onward, scaling toward a 75% cap with Luck using diminishing returns.
+13. [DONE] Add reroll tokens:
    - Every boss death guarantees 1 reroll token.
    - Normal enemies can rarely drop reroll tokens, starting at 0.5%.
    - Luck increases normal-enemy drop chance up to a maximum of 5%.
