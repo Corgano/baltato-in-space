@@ -1,0 +1,117 @@
+name: One-Time GameManager Order Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Move GameManager patches into GameManager source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          entities = Path('src/js/03-upgrades.js')
+          manager = Path('src/js/04-game-manager.js')
+          text = entities.read_text(encoding='utf-8')
+          lines = text.splitlines(keepends=True)
+
+          moved = []
+          kept = []
+          i = 0
+          depth = 0
+
+          def count_braces(line):
+              return line.count('{') - line.count('}')
+
+          while i < len(lines):
+              line = lines[i]
+              if depth == 0 and 'GameManager.prototype' in line:
+                  block = [line]
+                  block_depth = count_braces(line)
+                  i += 1
+                  while i < len(lines) and block_depth > 0:
+                      block.append(lines[i])
+                      block_depth += count_braces(lines[i])
+                      i += 1
+                  moved.extend(block)
+                  continue
+              kept.append(line)
+              depth += count_braces(line)
+              i += 1
+
+          if not moved:
+              raise SystemExit('No GameManager.prototype blocks found in 03-upgrades.js')
+
+          entities.write_text(''.join(kept), encoding='utf-8')
+
+          manager_text = manager.read_text(encoding='utf-8')
+          class_start = manager_text.find('class GameManager {')
+          if class_start < 0:
+              raise SystemExit('GameManager class not found')
+
+          depth = 0
+          class_opened = False
+          class_end = None
+          for pos in range(class_start, len(manager_text)):
+              ch = manager_text[pos]
+              if ch == '{':
+                  depth += 1
+                  class_opened = True
+              elif ch == '}':
+                  depth -= 1
+                  if class_opened and depth == 0:
+                      class_end = pos + 1
+                      break
+
+          if class_end is None:
+              raise SystemExit('Could not find end of GameManager class')
+
+          insertion = '\n\n/* INTEGRATED: GameManager patches moved from UpgradeManager source */\n' + ''.join(moved).rstrip() + '\n'
+          manager_text = manager_text[:class_end] + insertion + manager_text[class_end:]
+          manager.write_text(manager_text, encoding='utf-8')
+
+          print(f'Moved {len(moved)} lines of GameManager patches from 03-upgrades.js to 04-game-manager.js')
+          PY
+
+      - name: Build and syntax-check distributable
+        run: |
+          python3 tools/build.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path('dist/index.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script>(.*?)</script>', html, re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f'Expected exactly one inline script, found {len(scripts)}')
+          Path('/tmp/game.js').write_text(scripts[0], encoding='utf-8')
+          print('Built JavaScript:', len(scripts[0].splitlines()), 'lines')
+          PY
+          node --check /tmp/game.js
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/js/03-upgrades.js src/js/04-game-manager.js
+          git diff --cached --check
+          git commit -m "Fix GameManager patch load order"
+          git push
+
+      - name: Remove one-time workflow
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-gamemanager-order.yml
+          git commit -m "Remove one-time GameManager order workflow"
+          git push
