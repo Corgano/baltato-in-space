@@ -352,3 +352,274 @@ GameManager.prototype.gameLoop = function(currentTimestamp) {
 
   this.animationFrameId = requestAnimationFrame((ts) => this.gameLoop(ts));
 };
+
+/* TODO 9-13: explosion persistence, explosion chains, penetration synergies,
+ * and reroll tokens. Kept in the existing gameplay-fix layer to avoid adding
+ * another runtime script to the game. */
+
+function balttatoLuckCurve(luck, cap = 1, rate = 0.2) {
+  return cap * (1 - Math.exp(-rate * Math.max(0, Number(luck) || 0)));
+}
+
+function balttatoExplosionRanks(player) {
+  return (player.acquiredUpgrades || []).filter((title) => title === "PLASMA WARHEAD").length;
+}
+
+function balttatoExplosionChainChance(player) {
+  const ranks = balttatoExplosionRanks(player);
+  if (ranks <= 0) return 0;
+  const base = Math.min(0.5, ranks * 0.05);
+  return Math.min(1, base + (1 - base) * balttatoLuckCurve(player.luck, 1, 0.2));
+}
+
+function balttatoFragmentChance(player) {
+  const ranks = Math.max(0, Number(player.fragmentation) || 0);
+  if (ranks <= 0) return 0;
+  const base = 0.05;
+  const rankCurve = 1 - Math.exp(-0.18 * ranks);
+  const chance = base + (0.75 - base) * rankCurve;
+  return Math.min(0.75, chance + (0.75 - chance) * balttatoLuckCurve(player.luck, 1, 0.22));
+}
+
+function balttatoChainLightningChance(player) {
+  return Math.min(0.75, 0.10 + 0.65 * balttatoLuckCurve(player.luck, 1, 0.22));
+}
+
+function balttatoCreateChainExplosion(game, x, y, damage, depth) {
+  if (depth > 8) return;
+  const blast = new BlastEffect(x, y, game.player.blastRadius, "#f59e0b", 0.34);
+  blast.chainExplosion = true;
+  blast.chainDepth = depth;
+  blast.chainDamage = Math.max(2, Math.round(damage * 0.65));
+  blast.hitCooldowns = new Map();
+  game.blastEffects.push(blast);
+}
+
+function balttatoProcessBlastWave(game, blast, dt) {
+  if (!blast || blast.isDestroyed) return;
+  if (!blast.hitCooldowns) blast.hitCooldowns = new Map();
+
+  const progress = Math.min(1, blast.elapsed / blast.duration);
+  const waveRadius = progress * blast.maxRadius;
+  if (waveRadius <= 0) return;
+
+  const waveThickness = 10;
+  const damage = blast.chainExplosion ? blast.chainDamage : Math.max(2, Math.round(game.player.damage * 0.42));
+
+  for (let i = 0; i < game.enemies.length; i++) {
+    const enemy = game.enemies[i];
+    if (enemy.isDestroyed) continue;
+
+    const distance = Math.hypot(enemy.x - blast.x, enemy.y - blast.y);
+    if (Math.abs(distance - waveRadius) > waveThickness + enemy.radius) continue;
+
+    const cooldown = blast.hitCooldowns.get(enemy) || 0;
+    if (cooldown > 0) {
+      blast.hitCooldowns.set(enemy, Math.max(0, cooldown - dt));
+      continue;
+    }
+
+    blast.hitCooldowns.set(enemy, 0.12);
+    const waveDamage = Math.max(1, Math.round(damage * (enemy.isBoss ? 0.8 : 1)));
+    const killed = enemy.takeDamage(waveDamage);
+    game.floatingTexts.push(new FloatingText(enemy.x, enemy.y - 10, `${waveDamage}`, "#f59e0b", 0.42));
+
+    if (killed) {
+      game.handleEnemyDefeat(enemy);
+      if (Math.random() < balttatoExplosionChainChance(game.player)) {
+        balttatoCreateChainExplosion(game, enemy.x, enemy.y, waveDamage, (blast.chainDepth || 0) + 1);
+      }
+    }
+  }
+}
+
+const balttatoOriginalCheckCollisionsTodo913 = GameManager.prototype.checkCollisions;
+GameManager.prototype.checkCollisions = function() {
+  const penetrationCandidates = [];
+  for (let i = 0; i < this.projectiles.length; i++) {
+    const proj = this.projectiles[i];
+    if (!proj.isDestroyed && proj.pierceRemaining > 0 && !proj.isFragment) {
+      penetrationCandidates.push({ proj, hitCount: proj.hitEntities.size });
+    }
+  }
+
+  const blastCountBefore = this.blastEffects.length;
+  balttatoOriginalCheckCollisionsTodo913.call(this);
+
+  for (let i = blastCountBefore; i < this.blastEffects.length; i++) {
+    const blast = this.blastEffects[i];
+    if (!blast.hitCooldowns) blast.hitCooldowns = new Map();
+  }
+  for (let i = 0; i < this.blastEffects.length; i++) {
+    balttatoProcessBlastWave(this, this.blastEffects[i], 1 / 60);
+  }
+
+  for (let i = 0; i < penetrationCandidates.length; i++) {
+    const { proj, hitCount } = penetrationCandidates[i];
+    if (proj.isDestroyed || proj.hitEntities.size <= hitCount) continue;
+
+    const fragmentationLimit = Math.max(0, Math.round(this.player.fragmentation));
+    proj.penetrationFragmentsSpawned = proj.penetrationFragmentsSpawned || 0;
+    const fragmentChance = balttatoFragmentChance(this.player);
+
+    if (fragmentationLimit > proj.penetrationFragmentsSpawned && Math.random() < fragmentChance) {
+      let source = null;
+      for (const enemy of this.enemies) {
+        if (proj.hitEntities.has(enemy)) {
+          source = enemy;
+          break;
+        }
+      }
+      if (source) {
+        const angle = Math.atan2(proj.vy, proj.vx) + (Math.random() - 0.5) * 0.7;
+        const speed = Math.max(220, Math.hypot(proj.vx, proj.vy) * 0.7);
+        const shard = new Projectile(
+          source.x + Math.cos(angle) * 8,
+          source.y + Math.sin(angle) * 8,
+          Math.cos(angle) * speed,
+          Math.sin(angle) * speed,
+          3.5,
+          Math.max(2, Math.round(proj.damage * 0.45)),
+          0,
+          "#fb923c",
+          false,
+          0,
+          false,
+          0,
+          0,
+          300
+        );
+        shard.isFragment = true;
+        proj.hitEntities.forEach((enemy) => shard.hitEntities.add(enemy));
+        this.projectiles.push(shard);
+        proj.penetrationFragmentsSpawned += 1;
+      }
+    }
+
+    if (proj.chainRemaining > 0 && Math.random() < balttatoChainLightningChance(this.player)) {
+      let source = null;
+      for (const enemy of this.enemies) {
+        if (proj.hitEntities.has(enemy)) {
+          source = enemy;
+          break;
+        }
+      }
+      if (source) {
+        let target = null;
+        let targetDist = this.player.chainRange;
+        for (const enemy of this.enemies) {
+          if (enemy.isDestroyed || proj.hitEntities.has(enemy)) continue;
+          const distance = Math.hypot(enemy.x - source.x, enemy.y - source.y);
+          if (distance < targetDist) {
+            targetDist = distance;
+            target = enemy;
+          }
+        }
+        if (target) {
+          proj.hitEntities.add(target);
+          proj.chainRemaining -= 1;
+          this.lightningArcs.push(new LightningArc(source.x, source.y, target.x, target.y, "#22d3ee", 0.25));
+          const damage = Math.max(1, Math.round(this.player.damage * 0.55));
+          const killed = target.takeDamage(damage);
+          this.floatingTexts.push(new FloatingText(target.x, target.y - 12, `${damage}`, "#22d3ee", 0.5));
+          if (killed) this.handleEnemyDefeat(target);
+        }
+      }
+    }
+  }
+};
+
+const balttatoOriginalHandleEnemyDefeatReroll = GameManager.prototype.handleEnemyDefeat;
+GameManager.prototype.handleEnemyDefeat = function(enemy) {
+  const wasHandled = enemy.hasDroppedLoot;
+  balttatoOriginalHandleEnemyDefeatReroll.call(this, enemy);
+  if (wasHandled) return;
+
+  this.rerollTokens = this.rerollTokens || 0;
+  if (enemy.isBoss) {
+    this.rerollTokens += 1;
+    this.floatingTexts.push(new FloatingText(enemy.x, enemy.y - 28, "+1 REROLL", "#60a5fa", 0.9));
+    const bonusChance = Math.min(0.25, balttatoLuckCurve(this.player.luck, 1, 0.18) * 0.25);
+    if (Math.random() < bonusChance) {
+      this.rerollTokens += 1;
+      this.floatingTexts.push(new FloatingText(enemy.x, enemy.y - 44, "+1 BONUS REROLL", "#93c5fd", 0.9));
+    }
+    return;
+  }
+
+  const chance = 0.005 + (0.05 - 0.005) * balttatoLuckCurve(this.player.luck, 1, 0.18);
+  if (Math.random() < chance) {
+    this.rerollTokens += 1;
+    this.floatingTexts.push(new FloatingText(enemy.x, enemy.y - 22, "+1 REROLL", "#60a5fa", 0.8));
+  }
+};
+
+const balttatoOriginalRestartGameReroll = GameManager.prototype.restartGame;
+GameManager.prototype.restartGame = function() {
+  balttatoOriginalRestartGameReroll.call(this);
+  this.rerollTokens = 0;
+};
+
+GameManager.prototype.getRerollButtonRect = function() {
+  return { x: this.width / 2 - 92, y: this.height - 58, w: 184, h: 32 };
+};
+
+GameManager.prototype.rerollOfferings = function() {
+  if (this.state !== "LEVEL_UP" || this.cardBurn.active || (this.rerollTokens || 0) <= 0) return false;
+  this.rerollTokens -= 1;
+  this.upgradeManager.generateOfferings();
+  this.rerollButtonHover = false;
+  logDebug(1, "Upgrade offerings rerolled", { rerollTokens: this.rerollTokens });
+  return true;
+};
+
+const balttatoOriginalHandleCanvasClickReroll = GameManager.prototype.handleCanvasClick;
+GameManager.prototype.handleCanvasClick = function() {
+  if (this.state === "LEVEL_UP" && !this.cardBurn.active) {
+    const button = this.getRerollButtonRect();
+    if (this.mouseX >= button.x && this.mouseX <= button.x + button.w && this.mouseY >= button.y && this.mouseY <= button.y + button.h) {
+      this.rerollOfferings();
+      return;
+    }
+  }
+  balttatoOriginalHandleCanvasClickReroll.call(this);
+};
+
+const balttatoOriginalBindEventsReroll = GameManager.prototype.bindEvents;
+GameManager.prototype.bindEvents = function() {
+  balttatoOriginalBindEventsReroll.call(this);
+  this.canvas.addEventListener("mousemove", (e) => {
+    if (this.state !== "LEVEL_UP") return;
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (this.width / rect.width);
+    const my = (e.clientY - rect.top) * (this.height / rect.height);
+    const button = this.getRerollButtonRect();
+    this.rerollButtonHover = (this.rerollTokens || 0) > 0 && mx >= button.x && mx <= button.x + button.w && my >= button.y && my <= button.y + button.h;
+  });
+};
+
+const balttatoOriginalUpgradeOverlayReroll = UpgradeManager.prototype.drawOverlay;
+UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
+  balttatoOriginalUpgradeOverlayReroll.call(this, ctx, canvasW, canvasH, playerLevel, burnInfo);
+  const game = window.__arenaGameInstance;
+  if (!game || game.state !== "LEVEL_UP") return;
+
+  const button = game.getRerollButtonRect();
+  const available = (game.rerollTokens || 0) > 0;
+  const hovered = available && game.rerollButtonHover;
+  ctx.save();
+  ctx.fillStyle = hovered ? "#2563eb" : available ? "#1e3a5f" : "#1e293b";
+  ctx.strokeStyle = available ? "#60a5fa" : "#475569";
+  ctx.lineWidth = hovered ? 2 : 1;
+  ctx.shadowColor = hovered ? "#60a5fa" : "transparent";
+  ctx.shadowBlur = hovered ? 12 : 0;
+  drawRoundedRect(ctx, button.x, button.y, button.w, button.h, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = available ? "#ffffff" : "#64748b";
+  ctx.fillText(`REROLL OFFERINGS  [${game.rerollTokens || 0}]`, button.x + button.w / 2, button.y + button.h / 2);
+  ctx.restore();
+};
