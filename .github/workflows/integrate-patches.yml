@@ -1,0 +1,147 @@
+name: Integrate patch modules
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Integrate patch code into category modules
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path('.')
+          JS = ROOT / 'src' / 'js'
+          STYLES = ROOT / 'src' / 'styles.css'
+
+          def read(name):
+              return (JS / name).read_text(encoding='utf-8')
+
+          def append(path, title, text):
+              marker = f'/* INTEGRATED: {title} */'
+              if marker in path.read_text(encoding='utf-8'):
+                  return
+              with path.open('a', encoding='utf-8') as f:
+                  f.write(f'\n\n{marker}\n{text.strip()}\n')
+
+          # 04b: GameManager/core gameplay stays in the GameManager category.
+          p04b = read('04b-gameplay-fixes.js')
+          split_1416 = p04b.index('/* TODO 14-16:')
+          split_1718 = p04b.index('/* TODO 17-18:')
+          append(JS / '04-game-manager.js', 'core gameplay and pause/collision systems', p04b[:split_1416])
+          append(JS / '03-upgrades.js', 'upgrade rarity, Joker recurrence, and Luck offering curves', p04b[split_1416:split_1718])
+          append(JS / '04-game-manager.js', 'progressive enemy director and spawn scaling', p04b[split_1718:])
+
+          # 04c: Player/Boss behavior belongs with entities; UpgradeManager with upgrades;
+          # GameManager HUD wiring remains with GameManager.
+          p04c = read('04c-boost-hud.js')
+          i_upgrade = p04c.index('  const OriginalUpgradeManager = UpgradeManager;')
+          i_boss = p04c.index('  const OriginalBossUpdate = BossEnemy.prototype.update;')
+          i_manager = p04c.index('  const OriginalGameManager = GameManager;')
+          i_end = p04c.rfind('})();')
+          entity_pre = p04c[:i_upgrade].replace('(function() {', '').strip()
+          upgrade = p04c[i_upgrade:i_boss].strip()
+          boss = p04c[i_boss:i_manager].strip()
+          manager = p04c[i_manager:i_end].strip()
+          append(JS / '02-entities.js', 'boost-capable Player and boss charge telegraph', f'(function() {{\n{entity_pre}\n{boss}\n}})();')
+          append(JS / '03-upgrades.js', 'Boost Capacitor upgrade', f'(function() {{\n{upgrade}\n}})();')
+          append(JS / '04-game-manager.js', 'health and boost HUD manager integration', f'(function() {{\n{manager}\n}})();')
+
+          # Move the HUD CSS out of the patch script into the main stylesheet.
+          m = re.search(r'const hudStyle = document\.createElement\("style"\);\s*hudStyle\.textContent = `(?P<css>.*?)`;\s*document\.head\.appendChild\(hudStyle\);', p04c, re.S)
+          if m:
+              css = m.group('css').strip()
+              with STYLES.open('a', encoding='utf-8') as f:
+                  f.write('\n\n/* INTEGRATED: health and boost HUD */\n' + css + '\n')
+
+          # 04d: entity rendering/combat behavior in 02; boss spawning in 04.
+          p04d = read('04d-combat-visuals.js')
+          i_spawn = p04d.index('  const OriginalSpawnBoss = GameManager.prototype.spawnBoss;')
+          i_aimed = p04d.index('  // P-1: Aimed boss attacks')
+          i_projectile = p04d.index('  // #7/#20: Normalize enemy bullets')
+          i_end = p04d.rfind('})();')
+          entity_a = p04d[:i_spawn].replace('(function() {', '').strip()
+          manager_spawn = p04d[i_spawn:i_aimed].strip()
+          entity_b = p04d[i_aimed:i_end].strip()
+          append(JS / '02-entities.js', 'enemy projectile range and combat visual indicators', f'(function() {{\n{entity_a}\n{entity_b}\n}})();')
+          append(JS / '04-game-manager.js', 'randomized boss entry location', f'(function() {{\n{manager_spawn}\n}})();')
+
+          # 04e is entirely GameManager/world/progression behavior.
+          append(JS / '04-game-manager.js', 'dynamic world sizing and progression tuning', read('04e-progression-world.js'))
+
+          # 04f: upgrade/stat presentation in 03, pause/rack behavior in 04, CSS in styles.
+          p04f = read('04f-joker-stats.js')
+          i_defs = p04f.index('const BALTTATO_STAT_DEFINITIONS =')
+          i_manager = p04f.index('const balttatoOriginalUpgradeManagerClass = UpgradeManager;')
+          i_pause = p04f.index('function balttatoPlayerStatValue')
+          i_rack = p04f.index('function balttatoRefreshJokerRack')
+          i_end = p04f.rfind('})();')
+          style_match = re.search(r'const balttatoJokerScrapStyle = document\.createElement\("style"\);\s*balttatoJokerScrapStyle\.textContent = `(?P<css>.*?)`;\s*document\.head\.appendChild\(balttatoJokerScrapStyle\);', p04f, re.S)
+          if style_match:
+              with STYLES.open('a', encoding='utf-8') as f:
+                  f.write('\n\n/* INTEGRATED: Joker scrap controls */\n' + style_match.group('css').strip() + '\n')
+          upgrade_stats = p04f[i_defs:i_pause].strip()
+          manager_stats = p04f[i_pause:i_rack].strip()
+          manager_rack = p04f[i_rack:i_end].strip()
+          append(JS / '03-upgrades.js', 'upgrade stat metadata and Luck-scaled Joker offerings', f'(function() {{\n{upgrade_stats}\n}})();')
+          append(JS / '04-game-manager.js', 'pause stat panel and Joker rack integration', f'(function() {{\n{manager_stats}\n{manager_rack}\n}})();')
+
+          # 05-boot contained several late patch overrides. Move those into their
+          # owning categories and leave 05 as the actual boot/debug module.
+          p05 = read('05-boot.js')
+          i_card = p05.index('// Balatro-style Jokers use an exact 71x95 logical card design')
+          i_world = p05.index('// The intended game viewport is 25% larger')
+          i_style = p05.index('// Override the fixed 800x600 presentation frame')
+          i_date = p05.index('// Slow the Joker idle motion slightly')
+          i_info = p05.index('console.info("[ARENA]')
+
+          append(JS / '03-upgrades.js', 'Joker card layout and idle animation tuning', p05[i_card:i_world])
+          append(JS / '04-game-manager.js', '1000x750 logical game viewport', p05[i_world:i_style])
+          append(JS / '03-upgrades.js', 'Joker overlay idle timing', p05[i_date:i_info])
+
+          # Move the responsive viewport CSS into the main stylesheet.
+          viewport_css = '''\n/* INTEGRATED: enlarged responsive game viewport */\n#hud-panel,\n#canvas-container,\n#diagnostics-panel,\n#balatro-joker-rack {\n  width: 1000px;\n  max-width: 95vw;\n}\n\n#canvas-container {\n  height: 750px;\n  max-height: min(72vh, calc(100vh - 220px));\n  aspect-ratio: 1000 / 750;\n}\n'''
+          with STYLES.open('a', encoding='utf-8') as f:
+              f.write(viewport_css)
+
+          # Keep only debug controls and actual boot logic in 05.
+          boot = p05[:i_card] + p05[i_info:]
+          (JS / '05-boot.js').write_text(boot.strip() + '\n', encoding='utf-8')
+
+          # Fix the old hard-coded 3200x2400 initialization in the integrated
+          # GameManager layer. The intended level-1 world is 1.5x the 1000x750 viewport.
+          game_file = JS / '04-game-manager.js'
+          game = game_file.read_text(encoding='utf-8')
+          game = game.replace('this.worldWidth = BALTTATO_WORLD_WIDTH;\n  this.worldHeight = BALTTATO_WORLD_HEIGHT;', 'this.worldWidth = Math.round(this.width * 1.5);\n  this.worldHeight = Math.round(this.height * 1.5);')
+          game = game.replace('this.cameraX = this.worldWidth / 2 - this.width / (2 * BALTTATO_CAMERA_ZOOM);\n  this.cameraY = this.worldHeight / 2 - this.height / (2 * BALTTATO_CAMERA_ZOOM);\n  this.player.x = this.worldWidth / 2;\n  this.player.y = this.worldHeight / 2;', 'this.player.x = this.worldWidth / 2;\n  this.player.y = this.worldHeight / 2;\n  this.cameraX = this.player.x - (this.width / BALTTATO_CAMERA_ZOOM) / 2;\n  this.cameraY = this.player.y - (this.height / BALTTATO_CAMERA_ZOOM) / 2;', 1)
+          game = game.replace('this.player.x = this.worldWidth / 2;\n  this.player.y = this.worldHeight / 2;\n  this.cameraX = this.worldWidth / 2 - this.width / (2 * BALTTATO_CAMERA_ZOOM);\n  this.cameraY = this.worldHeight / 2 - this.height / (2 * BALTTATO_CAMERA_ZOOM);', 'this.player.x = this.worldWidth / 2;\n  this.player.y = this.worldHeight / 2;\n  this.cameraX = this.player.x - (this.width / BALTTATO_CAMERA_ZOOM) / 2;\n  this.cameraY = this.player.y - (this.height / BALTTATO_CAMERA_ZOOM) / 2;', 1)
+          game_file.write_text(game, encoding='utf-8')
+
+          # Remove the patch modules now that their contents have been classified.
+          for name in ['04b-gameplay-fixes.js', '04c-boost-hud.js', '04d-combat-visuals.js', '04e-progression-world.js', '04f-joker-stats.js']:
+              (JS / name).unlink()
+          PY
+
+      - name: Build and syntax-check
+        run: python3 tools/build.py
+
+      - name: Commit integrated source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tools
+          git rm --cached --ignore-unmatch .github/workflows/integrate-patches.yml
+          git add .github/workflows/integrate-patches.yml
+          git commit -m "Integrate patch code into category modules" || exit 0
+          git push origin main
