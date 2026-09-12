@@ -1,0 +1,31 @@
+name: Inspect game source
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source structure
+        run: |
+          {
+            echo "=== LINE COUNT ==="
+            wc -l index.html
+            echo
+            echo "=== FUNCTION / CLASS DECLARATIONS ==="
+            grep -nE '^\s*(async\s+)?function\s+|^\s*class\s+|^\s*[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*function\s*|^\s*[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*function\s*' index.html || true
+            echo
+            echo "=== KEYWORD OCCURRENCES ==="
+            grep -niE 'projectile|enemy|collision|pause|camera|world|gameLoop|requestAnimationFrame|update\(|draw\(' index.html || true
+          } > debug_index.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add debug_index.txt
+          git commit -m "Temporary source inspection"
+          git push
