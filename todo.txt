@@ -9,11 +9,11 @@ P3 = presentation / polish
 
 P-1 - New features to sort
 - decrease game map size to 1.5x the frame size. It should scale slowly with level, ex 1% extra size per level. The camera should be able to pan up to 20px off the edge.
-- enemies that produce projectiles towards the palyer should have a maximum range they start doing so from, so they just move towards the player if they are not close enough. Enemies that do not direct their projectiles at the player can do so from far away
+- [DONE] enemies that produce projectiles towards the palyer should have a maximum range they start doing so from, so they just move towards the player if they are not close enough. Enemies that do not direct their projectiles at the player can do so from far away
 - enemy xp should scale up with their health, so harder enemies on later levels also drop exp
 - bosses should drop a big chunk of exp, nearly a levels worth. 
 - decrease the amount of exp per level and the level exp scaling so they happen more often, have boss spawns  every 5 levels instead
-- randomize the location a boss spawns on screen ex which side they come in on
+- [DONE] randomize the location a boss spawns on screen ex which side they come in on
 - upgrades should be reworked. The upgrade should increase a relevant stat - luck, fragmentation, penetration, speed, movement, etc - and then the behaviours should be based off that speed. The individual upgrades should say waht stats they effect, and then the pause game screen should show a list of the player stats, and hovering over them should have a tooltip for the effects those stats do.
 - chance of joker spawnning should increase with luck stat
 - jokers collected, should be able to be sold from the joker tray (once the tray exists after getting the first joker). They should be able to bbe scrapped for rerol tokens.
@@ -32,7 +32,7 @@ P1 — Core gameplay systems
    - Boost movement speed should be about +100% over normal movement speed.
    - Boost upgrades increase the player's available boost capacity/amount.
 6. [DONE] Add health and boost meters to the upper-left HUD. Health should be a visual gauge; the boost gauge should use a distinct color (blue suggested) and only appear when boost is available.
-7. Improve enemy projectile readability: all enemy bullets should be red or pink, and higher-damage bullets should be visibly larger or otherwise clearly marked as more dangerous.
+7. [DONE] Improve enemy projectile readability: all enemy bullets should be red or pink, and higher-damage bullets should be visibly larger or otherwise clearly marked as more dangerous.
 8. [DONE] Replace the boss charge telegraph's effectively fixed long line with a telegraph that clearly indicates the actual charge distance the boss intends to travel.
 9. [DONE] Make the explosion/shockwave effect capable of hitting large enemies multiple times as the expanding wave passes through them, rather than limiting each enemy to a single hit when appropriate.
 10. [DONE] Add explosion-chain behavior: enemies killed by explosions can trigger additional explosions. The chance should depend on both Luck and the number of Explosion/Plasma Warhead ranks, with roughly 10 Explosion ranks reaching a 50% base chance and Luck eventually allowing the chance to reach 100%.
