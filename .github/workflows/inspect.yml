@@ -12,20 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract source structure
+      - name: Split source into chunks
         run: |
-          {
-            echo "=== LINE COUNT ==="
-            wc -l index.html
-            echo
-            echo "=== FUNCTION / CLASS DECLARATIONS ==="
-            grep -nE '^\s*(async\s+)?function\s+|^\s*class\s+|^\s*[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*function\s*|^\s*[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*function\s*' index.html || true
-            echo
-            echo "=== KEYWORD OCCURRENCES ==="
-            grep -niE 'projectile|enemy|collision|pause|camera|world|gameLoop|requestAnimationFrame|update\(|draw\(' index.html || true
-          } > debug_index.txt
+          rm -rf debug_source
+          mkdir debug_source
+          split -d -a 3 -l 250 index.html debug_source/chunk-
+          for f in debug_source/chunk-*; do mv "$f" "$f.txt"; done
+          printf '%s\n' "$(wc -l < index.html)" > debug_source/line_count.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add debug_index.txt
-          git commit -m "Temporary source inspection"
+          git add debug_source
+          git commit -m "Temporary source inspection chunks"
           git push
