@@ -924,3 +924,366 @@ class UpgradeManager {
      * - Escalating boss encounters every 3 levels with custom attack mechanics
      * =========================================================================
      */
+
+
+/* INTEGRATED: upgrade rarity, Joker recurrence, and Luck offering curves */
+/* TODO 14-16: weighted Joker rarity/recurrence and unified Luck curves. */
+
+const BALTTATO_UPGRADE_RARITY_WEIGHTS = {
+  COMMON: 1.0,
+  UNCOMMON: 0.65,
+  RARE: 0.35,
+  EPIC: 1.0
+};
+const BALTTATO_JOKER_OFFERING_CHANCE = 0.0075;
+const BALTTATO_EXTRA_CHOICE_CAP = 0.5;
+const BALTTATO_LUCK_CURVE_RATE = 0.2;
+
+balttatoLuckCurve = function(luck, cap = 1) {
+  return cap * (1 - Math.exp(-BALTTATO_LUCK_CURVE_RATE * Math.max(0, Number(luck) || 0)));
+};
+
+function balttatoUpgradeWeight(upgrade) {
+  return BALTTATO_UPGRADE_RARITY_WEIGHTS[upgrade.tierName] || 1;
+}
+
+function balttatoWeightedUpgradePick(pool) {
+  let totalWeight = 0;
+  for (let i = 0; i < pool.length; i++) {
+    totalWeight += balttatoUpgradeWeight(pool[i]);
+  }
+
+  if (totalWeight <= 0) return pool[0];
+
+  let roll = Math.random() * totalWeight;
+  for (let i = 0; i < pool.length; i++) {
+    roll -= balttatoUpgradeWeight(pool[i]);
+    if (roll <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+function balttatoExtraChoiceChance(player) {
+  return balttatoLuckCurve(player ? player.luck : 0, BALTTATO_EXTRA_CHOICE_CAP);
+}
+
+const balttatoOriginalGenerateOfferingsProgression = UpgradeManager.prototype.generateOfferings;
+UpgradeManager.prototype.generateOfferings = function(forceJoker = false, player = null) {
+  const choiceCount = 3 + (player && Math.random() < balttatoExtraChoiceChance(player) ? 1 : 0);
+  const pool = [...this.upgradeCatalog];
+  const offerings = [];
+
+  while (pool.length > 0 && offerings.length < choiceCount) {
+    const chosen = balttatoWeightedUpgradePick(pool);
+    offerings.push(chosen);
+    const chosenIndex = pool.indexOf(chosen);
+    if (chosenIndex >= 0) pool.splice(chosenIndex, 1);
+  }
+
+  this.activeCards = offerings;
+
+  const shouldSpawnJoker = forceJoker || Math.random() < BALTTATO_JOKER_OFFERING_CHANCE;
+  if (shouldSpawnJoker && this.jokerCatalog.length > 0) {
+    // Jokers deliberately draw from the complete catalog every time so a Joker
+    // can recur later in the same run rather than becoming permanently exhausted.
+    const chosenJoker = this.jokerCatalog[Math.floor(Math.random() * this.jokerCatalog.length)];
+    const slot = Math.floor(Math.random() * this.activeCards.length);
+    this.activeCards[slot] = { ...chosenJoker };
+    logDebug(1, "Balatro Joker offering generated", {
+      joker: chosenJoker.title,
+      chance: BALTTATO_JOKER_OFFERING_CHANCE,
+      slot
+    });
+  }
+
+  this.hoveredCardIndex = -1;
+
+  logDebug(1, "Brotato-style upgrade offerings generated", {
+    choices: this.activeCards.map(c => c.title),
+    choiceCount: this.activeCards.length,
+    extraChoiceChance: player ? balttatoExtraChoiceChance(player) : 0
+  });
+
+  return this.activeCards;
+};
+
+const balttatoOriginalGetCardLayoutProgression = UpgradeManager.prototype.getCardLayout;
+UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
+  const count = Math.max(3, this.activeCards.length || 3);
+  if (count <= 3) return balttatoOriginalGetCardLayoutProgression.call(this, canvasW, canvasH);
+
+  const cardW = 170;
+  const cardH = 245;
+  const gap = 12;
+  const totalW = cardW * count + gap * (count - 1);
+  const startX = (canvasW - totalW) / 2;
+  const startY = canvasH / 2 - 85;
+
+  const rects = [];
+  for (let i = 0; i < count; i++) {
+    rects.push({
+      x: startX + i * (cardW + gap),
+      y: startY,
+      w: cardW,
+      h: cardH
+    });
+  }
+  return rects;
+};
+
+const balttatoOriginalTriggerLevelUpProgression = GameManager.prototype.triggerLevelUp;
+GameManager.prototype.triggerLevelUp = function() {
+  this.state = "LEVEL_UP";
+  this.upgradeManager.generateOfferings(false, this.player);
+  logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+    level: this.playerLevel,
+    currentXp: this.currentXp,
+    threshold: this.xpThreshold,
+    choices: this.upgradeManager.activeCards.length
+  });
+};
+
+const balttatoOriginalRerollOfferingsProgression = GameManager.prototype.rerollOfferings;
+GameManager.prototype.rerollOfferings = function() {
+  if (this.state !== "LEVEL_UP" || this.cardBurn.active || (this.rerollTokens || 0) <= 0) return false;
+  this.rerollTokens -= 1;
+  this.upgradeManager.generateOfferings(false, this.player);
+  this.rerollButtonHover = false;
+  logDebug(1, "Upgrade offerings rerolled", { rerollTokens: this.rerollTokens, choices: this.upgradeManager.activeCards.length });
+  return true;
+};
+
+const balttatoOriginalSelectUpgradeByIndexProgression = GameManager.prototype.selectUpgradeByIndex;
+GameManager.prototype.selectUpgradeByIndex = function(index) {
+  return balttatoOriginalSelectUpgradeByIndexProgression.call(this, index);
+};
+
+
+/* INTEGRATED: Boost Capacitor upgrade */
+(function() {
+const OriginalUpgradeManager = UpgradeManager;
+  UpgradeManager = class extends OriginalUpgradeManager {
+    constructor() {
+      super();
+      this.upgradeCatalog.push({
+        id: "boost_capacity",
+        title: "BOOST CAPACITOR",
+        tierName: "UNCOMMON",
+        rarityColor: "#38bdf8",
+        description: "Adds +50 boost capacity and fully charges the new capacity",
+        apply: (player) => {
+          player.boostCapacity += 50;
+          player.boost = player.boostCapacity;
+          logDebug(1, "Upgrade applied: BOOST CAPACITOR", {
+            boostCapacity: player.boostCapacity,
+            boost: player.boost
+          });
+        }
+      });
+    }
+  };
+})();
+
+
+/* INTEGRATED: upgrade stat metadata and Luck-scaled Joker offerings */
+(function() {
+const BALTTATO_STAT_DEFINITIONS = [
+  { key: "damage", label: "Damage", format: (v) => `${Math.round(v)}`, tooltip: "Base damage dealt by each projectile before critical hits and impact-speed bonuses." },
+  { key: "fireInterval", label: "Fire Rate", format: (v) => `${v.toFixed(2)}s`, tooltip: "Time between automatic firing cycles. Lower is faster." },
+  { key: "multishotCount", label: "Multishot", format: (v) => `${Math.round(v)}`, tooltip: "Projectiles fired in each automatic volley." },
+  { key: "projectileSpeed", label: "Projectile Speed", format: (v) => `${Math.round(v)} px/s`, tooltip: "Flight speed of projectiles. Faster impacts receive a kinetic damage bonus." },
+  { key: "weaponRange", label: "Range", format: (v) => `${Math.round(v)} px`, tooltip: "Maximum distance used when automatically acquiring targets." },
+  { key: "pierceCount", label: "Penetration", format: (v) => `${Math.round(v)}`, tooltip: "Additional enemies a projectile can pass through before being destroyed." },
+  { key: "fragmentation", label: "Fragmentation", format: (v) => `${Math.round(v)}`, tooltip: "Maximum fragmentation shards and the strength of penetration-fragment synergies." },
+  { key: "chainHits", label: "Chain Lightning", format: (v) => `${Math.round(v)}`, tooltip: "Number of additional targets a projectile can chain to with lightning." },
+  { key: "ricochetCount", label: "Ricochet", format: (v) => `${Math.round(v)}`, tooltip: "Number of times a projectile can bounce from the arena perimeter." },
+  { key: "critChance", label: "Critical Chance", format: (v) => `${Math.round(v * 100)}%`, tooltip: "Chance for a projectile to deal its critical multiplier damage." },
+  { key: "critMultiplier", label: "Critical Multiplier", format: (v) => `${v.toFixed(1)}x`, tooltip: "Damage multiplier applied when a critical hit occurs." },
+  { key: "speed", label: "Movement", format: (v) => `${Math.round(v)} px/s`, tooltip: "Normal player movement speed. Boost temporarily doubles this value." },
+  { key: "luck", label: "Luck", format: (v) => `${Math.round(v)}`, tooltip: "Improves rare-progression rolls, including Joker offers, reroll drops, chain effects, and bonus choices." },
+  { key: "magnetRadius", label: "Pickup Radius", format: (v) => `${Math.round(v)} px`, tooltip: "Distance from which dropped XP is pulled toward the player." },
+  { key: "maxHealth", label: "Max Hull", format: (v) => `${Math.round(v)}`, tooltip: "Maximum hull integrity. Hull upgrades also restore health when acquired." },
+  { key: "armor", label: "Armor", format: (v) => `${Math.round(v)}`, tooltip: "Flat damage mitigation applied to incoming hits." },
+  { key: "boostCapacity", label: "Boost Capacity", format: (v) => `${Math.round(v)}`, tooltip: "Maximum boost resource available while holding SHIFT during movement." },
+  { key: "blastRadius", label: "Blast Radius", format: (v) => `${Math.round(v)} px`, tooltip: "Area reached by Plasma Warhead explosion waves." }
+];
+
+const BALTTATO_UPGRADE_STAT_EFFECTS = {
+  chain_hits: ["Chain Lightning +1"],
+  multishot: ["Multishot +1"],
+  overclock_speed: ["Movement +25 px/s"],
+  ricochet: ["Ricochet +1"],
+  explosive_rounds: ["Plasma Warhead", "Blast Radius +15 px"],
+  nanite_siphon: ["Life Leech +15%"],
+  attack_speed: ["Fire Rate -18%"],
+  heavy_ordnance: ["Damage +12"],
+  piercing_rounds: ["Penetration +1"],
+  vital_bulk: ["Max Hull +30", "Restore +40 Hull"],
+  energy_shield: ["Armor +3"],
+  vacuum_funnel: ["Pickup Radius +70 px"],
+  crit_overcharge: ["Critical Chance +15%", "Critical Multiplier 2.5x"],
+  targeting_sensor: ["Range +22% base scaling"],
+  focal_array: ["Damage +6", "Range +30% base scaling"],
+  accelerator_coils: ["Projectile Speed +20%"],
+  hypervelocity_cores: ["Projectile Speed +35%", "Range +18% base scaling"],
+  lucky_charm: ["Luck +1"],
+  shrapnel_casing: ["Fragmentation +2"],
+  cluster_munitions: ["Fragmentation +3", "Projectile Speed +15%"],
+  boost_capacity: ["Boost Capacity +50", "Fully recharge Boost"]
+};
+
+function balttatoFormatUpgradeStats(upgrade) {
+  const effects = BALTTATO_UPGRADE_STAT_EFFECTS[upgrade.id];
+  return effects && effects.length > 0 ? `Stats: ${effects.join(" | ")}` : "";
+}
+
+// Make every catalog entry expose explicit stat effects without rewriting the
+// existing upgrade implementations. The actual behaviors already consume the
+// player stat fields; this layer makes those relationships visible to the UI.
+const balttatoOriginalUpgradeManagerClass = UpgradeManager;
+UpgradeManager = class extends balttatoOriginalUpgradeManagerClass {
+  constructor() {
+    super();
+    for (let i = 0; i < this.upgradeCatalog.length; i++) {
+      const upgrade = this.upgradeCatalog[i];
+      upgrade.statEffects = BALTTATO_UPGRADE_STAT_EFFECTS[upgrade.id] || [];
+    }
+    for (let i = 0; i < this.jokerCatalog.length; i++) {
+      this.jokerCatalog[i].statEffects = ["Joker passive"];
+    }
+  }
+};
+
+const balttatoOriginalGenerateOfferingsStats = UpgradeManager.prototype.generateOfferings;
+const BALTTATO_JOKER_BASE_CHANCE = 0.0075;
+const BALTTATO_JOKER_LUCK_CAP = 0.075;
+
+function balttatoJokerOfferChance(luck) {
+  const normalizedLuck = Math.max(0, Number(luck) || 0);
+  const luckFactor = 1 - Math.exp(-0.2 * normalizedLuck);
+  return Math.min(BALTTATO_JOKER_LUCK_CAP, BALTTATO_JOKER_BASE_CHANCE + (BALTTATO_JOKER_LUCK_CAP - BALTTATO_JOKER_BASE_CHANCE) * luckFactor);
+}
+
+UpgradeManager.prototype.generateOfferings = function(forceJoker = false, player = null) {
+  const choiceCount = 3 + (player && Math.random() < balttatoExtraChoiceChance(player) ? 1 : 0);
+  const pool = [...this.upgradeCatalog];
+  const offerings = [];
+
+  while (pool.length > 0 && offerings.length < choiceCount) {
+    const chosen = balttatoWeightedUpgradePick(pool);
+    offerings.push(chosen);
+    const chosenIndex = pool.indexOf(chosen);
+    if (chosenIndex >= 0) pool.splice(chosenIndex, 1);
+  }
+
+  this.activeCards = offerings;
+
+  const jokerChance = balttatoJokerOfferChance(player ? player.luck : 0);
+  if (forceJoker || (Math.random() < jokerChance && this.jokerCatalog.length > 0)) {
+    const chosenJoker = this.jokerCatalog[Math.floor(Math.random() * this.jokerCatalog.length)];
+    const slot = Math.floor(Math.random() * this.activeCards.length);
+    this.activeCards[slot] = { ...chosenJoker };
+    logDebug(1, "Balatro Joker offering generated", {
+      joker: chosenJoker.title,
+      chance: jokerChance,
+      luck: player ? player.luck : 0,
+      slot
+    });
+  }
+
+  this.hoveredCardIndex = -1;
+  return this.activeCards;
+};
+
+GameManager.prototype.triggerLevelUp = function() {
+  this.state = "LEVEL_UP";
+  this.upgradeManager.generateOfferings(false, this.player);
+  logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+    level: this.playerLevel,
+    currentXp: this.currentXp,
+    threshold: this.xpThreshold,
+    choices: this.upgradeManager.activeCards.length
+  });
+};
+
+GameManager.prototype.rerollOfferings = function() {
+  if (this.state !== "LEVEL_UP" || this.cardBurn.active || (this.rerollTokens || 0) <= 0) return false;
+  this.rerollTokens -= 1;
+  this.upgradeManager.generateOfferings(false, this.player);
+  this.rerollButtonHover = false;
+  logDebug(1, "Upgrade offerings rerolled", { rerollTokens: this.rerollTokens, choices: this.upgradeManager.activeCards.length });
+  return true;
+};
+
+const balttatoOriginalUpgradeDrawOverlayStats = UpgradeManager.prototype.drawOverlay;
+UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
+  const descriptions = [];
+  for (let i = 0; i < this.activeCards.length; i++) {
+    const card = this.activeCards[i];
+    descriptions.push(card.description);
+    if (!card.isJoker) {
+      const statText = balttatoFormatUpgradeStats(card);
+      if (statText && !card.description.includes("Stats:")) card.description = `${card.description} — ${statText}`;
+    }
+  }
+
+  try {
+    balttatoOriginalUpgradeDrawOverlayStats.call(this, ctx, canvasW, canvasH, playerLevel, burnInfo);
+  } finally {
+    for (let i = 0; i < this.activeCards.length && i < descriptions.length; i++) {
+      this.activeCards[i].description = descriptions[i];
+    }
+  }
+};
+})();
+
+
+/* INTEGRATED: Joker card layout and idle animation tuning */
+// Balatro-style Jokers use an exact 71x95 logical card design, rendered at a
+// reduced height so the reward cards do not overlap the level-up instructions.
+const BALTTATO_JOKER_BASE_WIDTH = 71;
+const BALTTATO_JOKER_BASE_HEIGHT = 95;
+const BALTTATO_JOKER_RENDER_SCALE = 3;
+const BALTTATO_JOKER_WIDTH = BALTTATO_JOKER_BASE_WIDTH * BALTTATO_JOKER_RENDER_SCALE;
+const BALTTATO_JOKER_HEIGHT = 255;
+
+const balttatoOriginalUpgradeCardLayout = UpgradeManager.prototype.getCardLayout;
+UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
+      const cardW = BALTTATO_JOKER_WIDTH;
+      const cardH = BALTTATO_JOKER_HEIGHT;
+      const gap = 20;
+      const totalW = cardW * 3 + gap * 2;
+      const startX = (canvasW - totalW) / 2;
+      // Keep the cards below the level-up heading/subheading instead of
+      // vertically centering the taller cards over that text.
+      const startY = canvasH / 2 - 85;
+
+      const rects = [];
+      for (let i = 0; i < 3; i++) {
+        rects.push({
+          x: startX + i * (cardW + gap),
+          y: startY,
+          w: cardW,
+          h: cardH
+        });
+      }
+      return rects;
+    };
+
+
+/* INTEGRATED: Joker overlay idle timing */
+// Slow the Joker idle motion slightly and reduce its vertical float amplitude.
+// The original renderer uses Date.now() for both the idle motion and burn effect;
+// scaling the clock only while the overlay is drawn keeps the rest of the game
+// timing untouched.
+const balttatoOriginalUpgradeDrawOverlay = UpgradeManager.prototype.drawOverlay;
+UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
+      const originalDateNow = Date.now;
+      const now = performance.now();
+      Date.now = () => Math.floor(now * 0.72);
+      try {
+        return balttatoOriginalUpgradeDrawOverlay.call(this, ctx, canvasW, canvasH, playerLevel, burnInfo);
+      } finally {
+        Date.now = originalDateNow;
+      }
+    };

@@ -1649,3 +1649,245 @@ class Player {
      * and mutates the player vessel stats.
      * =========================================================================
      */
+
+
+/* INTEGRATED: boost-capable Player and boss charge telegraph */
+(function() {
+const statusMeters = document.createElement("div");
+  statusMeters.id = "arena-status-meters";
+  statusMeters.innerHTML = `
+    <div class="arena-meter" id="hudHealthMeterWrap">
+      <div class="arena-meter-label"><span>Hull</span><span id="hudHealthText">100%</span></div>
+      <div class="arena-meter-track"><div class="arena-meter-fill" id="hudHealthMeter"></div></div>
+    </div>
+    <div class="arena-meter" id="hudBoostMeterWrap">
+      <div class="arena-meter-label"><span>Boost</span><span id="hudBoostText">0%</span></div>
+      <div class="arena-meter-track"><div class="arena-meter-fill" id="hudBoostMeter"></div></div>
+    </div>
+  `;
+  const canvasContainer = document.getElementById("canvas-container");
+  if (canvasContainer) canvasContainer.appendChild(statusMeters);
+
+  const hudStyle = document.createElement("style");
+  hudStyle.textContent = `
+    #arena-status-meters {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      z-index: 5;
+      width: 180px;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .arena-meter {
+      margin-bottom: 7px;
+      display: none;
+    }
+    .arena-meter-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-shadow: 0 1px 2px #000;
+    }
+    .arena-meter-track {
+      height: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 3px;
+      background: rgba(15, 23, 42, 0.82);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    .arena-meter-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 80ms linear;
+    }
+    #hudHealthMeter { background: #ef4444; }
+    #hudBoostMeter { background: #38bdf8; }
+    @media (max-width: 700px) {
+      #arena-status-meters { width: 145px; }
+    }
+  `;
+  document.head.appendChild(hudStyle);
+
+  const OriginalPlayer = Player;
+  Player = class extends OriginalPlayer {
+    constructor(x, y) {
+      super(x, y);
+      this.boostCapacity = 0;
+      this.boost = 0;
+    }
+
+    reset(startX, startY) {
+      super.reset(startX, startY);
+      this.boostCapacity = 0;
+      this.boost = 0;
+    }
+
+    update(dt, activeKeys, arenaWidth, arenaHeight) {
+      const moving = activeKeys.has("KeyW") || activeKeys.has("KeyA") || activeKeys.has("KeyS") || activeKeys.has("KeyD") ||
+        activeKeys.has("ArrowUp") || activeKeys.has("ArrowDown") || activeKeys.has("ArrowLeft") || activeKeys.has("ArrowRight");
+      const boosting = moving && (activeKeys.has("ShiftLeft") || activeKeys.has("ShiftRight"));
+      const canBoost = boosting && this.boost > 0;
+      const normalSpeed = this.speed;
+
+      if (canBoost) this.speed = normalSpeed * 2;
+
+      super.update(dt, activeKeys, arenaWidth, arenaHeight);
+      this.speed = normalSpeed;
+
+      if (canBoost) this.boost = Math.max(0, this.boost - 45 * dt);
+    }
+  };
+const OriginalBossUpdate = BossEnemy.prototype.update;
+  BossEnemy.prototype.update = function(dt, targetX, targetY, enemyProjectiles) {
+    const previousState = this.chargeState;
+    OriginalBossUpdate.call(this, dt, targetX, targetY, enemyProjectiles);
+    if (previousState === "TRACKING" && this.chargeState === "TELEGRAPH") {
+      const distanceToEdge = this.getChargeDistanceToBoundary();
+      this.chargeDistance = Math.min(this.dashSpeed * this.dashDuration, distanceToEdge);
+    }
+  };
+
+  BossEnemy.prototype.getChargeDistanceToBoundary = function() {
+    const dx = this.dashUnitX;
+    const dy = this.dashUnitY;
+    const distances = [];
+
+    if (dx > 0) distances.push((this.arenaWidth - this.radius - this.x) / dx);
+    if (dx < 0) distances.push((this.radius - this.x) / dx);
+    if (dy > 0) distances.push((this.arenaHeight - this.radius - this.y) / dy);
+    if (dy < 0) distances.push((this.radius - this.y) / dy);
+
+    const positiveDistances = distances.filter((distance) => distance >= 0);
+    return positiveDistances.length > 0 ? Math.min(...positiveDistances) : 0;
+  };
+
+  const OriginalBossDraw = BossEnemy.prototype.draw;
+  BossEnemy.prototype.draw = function(ctx) {
+    if (this.chargeState === "TELEGRAPH") {
+      const chargeDistance = Math.max(0, this.chargeDistance || this.dashSpeed * this.dashDuration);
+      const scale = chargeDistance / 700;
+      const originalX = this.dashUnitX;
+      const originalY = this.dashUnitY;
+      this.dashUnitX *= scale;
+      this.dashUnitY *= scale;
+      try {
+        OriginalBossDraw.call(this, ctx);
+      } finally {
+        this.dashUnitX = originalX;
+        this.dashUnitY = originalY;
+      }
+      return;
+    }
+    OriginalBossDraw.call(this, ctx);
+  };
+})();
+
+
+/* INTEGRATED: enemy projectile range and combat visual indicators */
+(function() {
+const ENEMY_PROJECTILE_RANGE = 420;
+
+  // P-1: Aimed projectile enemies only open fire once the player is close enough.
+  // They continue tracking/approaching normally while outside that firing range.
+  const OriginalEnemyUpdate = Enemy.prototype.update;
+  Enemy.prototype.update = function(dt, targetX, targetY, enemyProjectiles) {
+    if (this.enemyType === "shooter") {
+      const distanceToPlayer = Math.hypot(targetX - this.x, targetY - this.y);
+      if (distanceToPlayer > ENEMY_PROJECTILE_RANGE) {
+        const suppressedProjectiles = { push: () => 0 };
+        OriginalEnemyUpdate.call(this, dt, targetX, targetY, suppressedProjectiles);
+        return;
+      }
+    }
+
+    OriginalEnemyUpdate.call(this, dt, targetX, targetY, enemyProjectiles);
+  };
+
+  // P-1: Bosses can enter from any arena edge instead of always arriving from above.
+// P-1: Aimed boss attacks respect the same sensible engagement range.
+  const OriginalBossAimedCluster = BossEnemy.prototype.fireAimedCluster;
+  BossEnemy.prototype.fireAimedCluster = function(targetX, targetY, enemyProjectiles) {
+    const distanceToPlayer = Math.hypot(targetX - this.x, targetY - this.y);
+    if (distanceToPlayer > ENEMY_PROJECTILE_RANGE) {
+      logDebug(3, "Boss aimed volley withheld outside projectile engagement range", {
+        distance: distanceToPlayer.toFixed(1),
+        maxRange: ENEMY_PROJECTILE_RANGE
+      });
+      return;
+    }
+
+    OriginalBossAimedCluster.call(this, targetX, targetY, enemyProjectiles);
+  };
+
+  // #7/#20: Normalize enemy bullets to an unmistakable red/pink threat palette,
+  // and make higher-damage bullets visibly larger with a warning ring.
+  const OriginalEnemyProjectile = EnemyProjectile;
+  EnemyProjectile = class extends OriginalEnemyProjectile {
+    constructor(x, y, vx, vy, radius = 5, damage = 12, color = "#ef4444") {
+      const threatColor = damage >= 15 ? "#fb7185" : "#ef4444";
+      const threatRadius = Math.max(radius, 4.5 + damage * 0.12);
+      super(x, y, vx, vy, threatRadius, damage, threatColor);
+      this.threatLevel = damage >= 15 ? "HIGH" : "STANDARD";
+    }
+
+    draw(ctx) {
+      ctx.save();
+
+      if (this.threatLevel === "HIGH") {
+        const pulse = 1 + Math.sin(Date.now() * 0.012) * 0.12;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 1.55 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(251, 113, 133, 0.65)";
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = "#fb7185";
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = this.threatLevel === "HIGH" ? 12 : 8;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius * 0.38, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  // #20: Give each major combat effect a consistent, distinct visual signature.
+  const OriginalLightningArc = LightningArc.prototype.draw;
+  LightningArc.prototype.draw = function(ctx) {
+    const originalColor = this.color;
+    this.color = "#a855f7";
+    OriginalLightningArc.call(this, ctx);
+    this.color = originalColor;
+  };
+
+  const OriginalBlastEffect = BlastEffect.prototype.draw;
+  BlastEffect.prototype.draw = function(ctx) {
+    const originalColor = this.color;
+    this.color = "#f59e0b";
+    OriginalBlastEffect.call(this, ctx);
+    this.color = originalColor;
+  };
+
+  const OriginalProjectileDraw = Projectile.prototype.draw;
+  Projectile.prototype.draw = function(ctx) {
+    const originalColor = this.color;
+    if (this.isFragment) this.color = "#fb923c";
+    OriginalProjectileDraw.call(this, ctx);
+    this.color = originalColor;
+  };
+})();

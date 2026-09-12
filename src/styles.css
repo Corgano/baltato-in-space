@@ -463,3 +463,91 @@
       color: #f87171;
       font-weight: 700;
     }
+
+
+/* INTEGRATED: health and boost HUD */
+#arena-status-meters {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      z-index: 5;
+      width: 180px;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .arena-meter {
+      margin-bottom: 7px;
+      display: none;
+    }
+    .arena-meter-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-shadow: 0 1px 2px #000;
+    }
+    .arena-meter-track {
+      height: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 3px;
+      background: rgba(15, 23, 42, 0.82);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    .arena-meter-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 80ms linear;
+    }
+    #hudHealthMeter { background: #ef4444; }
+    #hudBoostMeter { background: #38bdf8; }
+    @media (max-width: 700px) {
+      #arena-status-meters { width: 145px; }
+    }
+
+
+/* INTEGRATED: Joker scrap controls */
+.joker-scrap-btn {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 2px;
+    z-index: 60;
+    padding: 2px 1px;
+    border: 1px solid #60a5fa;
+    border-radius: 3px;
+    background: rgba(30, 64, 175, 0.94);
+    color: #ffffff;
+    font: 800 7px monospace;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .joker-mini-card:hover .joker-scrap-btn {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .joker-scrap-btn:hover {
+    background: #2563eb;
+  }
+
+/* INTEGRATED: enlarged responsive game viewport */
+#hud-panel,
+#canvas-container,
+#diagnostics-panel,
+#balatro-joker-rack {
+  width: 1000px;
+  max-width: 95vw;
+}
+
+#canvas-container {
+  height: 750px;
+  max-height: min(72vh, calc(100vh - 220px));
+  aspect-ratio: 1000 / 750;
+}
