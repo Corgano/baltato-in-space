@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Canvas Arena Survivor [v1.4.0]</title>
+  <meta name="description" content="A minimalist, single-file HTML5 arena survival game featuring auto-combat, level-up mechanics, and entity-managed movement. Version 1.4.0 with 4x scrolling world field, dynamic camera tracking, rebalanced projectile velocity, and color-decaying lucky XP gems." />
+  <style>
+    <!-- BUILD:STYLES -->
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Secret Balatro Joker Rack (Initially completely hidden with 0 height until first Joker is obtained) -->
+    <section id="balatro-joker-rack" class="joker-rack-hidden">
+      <div class="joker-rack-container">
+        <div class="joker-rack-label">
+          <span class="joker-rack-tag">JOKERS</span>
+          <span class="joker-rack-counter" id="jokerCountLabel">0 / 5</span>
+        </div>
+        <div class="joker-slots" id="jokerSlotsContainer">
+          <div class="joker-slot empty" id="jokerSlot0"></div>
+          <div class="joker-slot empty" id="jokerSlot1"></div>
+          <div class="joker-slot empty" id="jokerSlot2"></div>
+          <div class="joker-slot empty" id="jokerSlot3"></div>
+          <div class="joker-slot empty" id="jokerSlot4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Floating Balatro Tooltip Overlay for DOM Elements -->
+    <div id="balatro-dom-tooltip" class="balatro-tooltip-hidden">
+      <div class="b-tooltip-header">
+        <span class="b-badge joker">JOKER</span>
+        <span class="b-badge rarity-uncommon" id="bTooltipRarity">UNCOMMON</span>
+      </div>
+      <div class="b-tooltip-title" id="bTooltipTitle">Snail Mail</div>
+      <div class="b-tooltip-divider"></div>
+      <div class="b-tooltip-desc" id="bTooltipDesc"></div>
+    </div>
+
+    <!-- Heads-Up Display Telemetry Bar -->
+    <header id="hud-panel">
+      <div class="hud-group" id="hudSectorGroup">
+        <span class="hud-label">Sector</span>
+        <span class="hud-value score" id="hudSector">SECTOR-01</span>
+      </div>
+      <div class="hud-group" id="hudHpGroup">
+        <span class="hud-label">Hull Integrity</span>
+        <span class="hud-value hp" id="hudHp">100 / 100</span>
+      </div>
+      <div class="hud-group" id="hudLevelGroup">
+        <span class="hud-label">Level</span>
+        <span class="hud-value score" id="hudLevel">1</span>
+      </div>
+      <div class="hud-group" id="hudXpGroup">
+        <span class="hud-label">XP Progression</span>
+        <span class="hud-value xp" id="hudXp">0 / 30</span>
+      </div>
+      <div class="hud-group" id="hudRangeGroup">
+        <span class="hud-label">Range</span>
+        <span class="hud-value score" id="hudRange">260px</span>
+      </div>
+      <div class="hud-group" id="hudUpgradesGroup">
+        <span class="hud-label">Augments</span>
+        <span class="hud-value score" id="hudUpgrades">0</span>
+      </div>
+      <div class="hud-group" id="hudKillsGroup">
+        <span class="hud-label">Hostiles Purged</span>
+        <span class="hud-value kills" id="hudKills">0</span>
+      </div>
+      <div class="hud-group" id="hudScoreGroup">
+        <span class="hud-label">Data Score</span>
+        <span class="hud-value score" id="hudScore">0</span>
+      </div>
+    </header>
+
+    <!-- Main Canvas Viewport -->
+    <main id="canvas-container">
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </main>
+
+    <!-- Diagnostic and Logging Control Panel -->
+    <footer id="diagnostics-panel">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="hud-version-badge" id="hudVersionBadge"><span class="hud-version-dot"></span>v1.4.0</span>
+        <span>Controls: [W][A][S][D] Move | Auto-Target | [1][2][3] Select Upgrade Card</span>
+      </div>
+      <div class="debug-controls">
+        <button type="button" class="debug-btn" id="btnTestJoker" title="Test: Guarantee Balatro Joker card on next offering">Test: Joker (1/200)</button>
+        <span>Verbosity:</span>
+        <button type="button" class="debug-btn" data-level="0" id="dbg0">0: Off</button>
+        <button type="button" class="debug-btn active" data-level="1" id="dbg1">1: Normal</button>
+        <button type="button" class="debug-btn" data-level="2" id="dbg2">2: Verbose</button>
+        <button type="button" class="debug-btn" data-level="3" id="dbg3">3: Trace</button>
+        <button type="button" class="debug-btn" data-level="4" id="dbg4">4: Flood</button>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    <!-- BUILD:SCRIPT -->
+  </script>
+</body>
+</html>

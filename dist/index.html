@@ -9,7 +9,7 @@
   <title>Canvas Arena Survivor [v1.4.0]</title>
   <meta name="description" content="A minimalist, single-file HTML5 arena survival game featuring auto-combat, level-up mechanics, and entity-managed movement. Version 1.4.0 with 4x scrolling world field, dynamic camera tracking, rebalanced projectile velocity, and color-decaying lucky XP gems." />
   <style>
-/* -------------------------------------------------------------------------
+    /* -------------------------------------------------------------------------
        CSS Reset & Architectural Layout Styles
        Embedded directly to ensure single-file portability.
        ------------------------------------------------------------------------- */
@@ -566,8 +566,7 @@
   </div>
 
   <script>
-    /* ===== src/js/01-utils.js ===== */
-/**
+    /**
      * =========================================================================
      * NOT BROTATO - MINIMALIST TOP-DOWN ARENA SURVIVOR
      * =========================================================================
@@ -805,7 +804,6 @@
      * =========================================================================
      */
 
-    /* ===== src/js/02-entities.js ===== */
 class Player {
       /**
        * Constructs the Player instance with default starting stats.
@@ -2458,7 +2456,6 @@ class Player {
      * =========================================================================
      */
 
-    /* ===== src/js/03-upgrades.js ===== */
 class UpgradeManager {
       /**
        * Constructs the UpgradeManager catalog of player augmentations.
@@ -3386,7 +3383,6 @@ class UpgradeManager {
      * =========================================================================
      */
 
-    /* ===== src/js/04-game-manager.js ===== */
 class GameManager {
       /**
        * Constructs and initializes the GameManager.
@@ -5205,7 +5201,6 @@ class GameManager {
      * @returns {void}
      */
 
-    /* ===== src/js/05-boot.js ===== */
 function bootGame() {
       const canvasElement = document.getElementById("gameCanvas");
       if (canvasElement) {

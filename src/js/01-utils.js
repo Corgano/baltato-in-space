@@ -1,72 +1,3 @@
-        <span class="b-badge joker">JOKER</span>
-        <span class="b-badge rarity-uncommon" id="bTooltipRarity">UNCOMMON</span>
-      </div>
-      <div class="b-tooltip-title" id="bTooltipTitle">Snail Mail</div>
-      <div class="b-tooltip-divider"></div>
-      <div class="b-tooltip-desc" id="bTooltipDesc"></div>
-    </div>
-
-    <!-- Heads-Up Display Telemetry Bar -->
-    <header id="hud-panel">
-      <div class="hud-group" id="hudSectorGroup">
-        <span class="hud-label">Sector</span>
-        <span class="hud-value score" id="hudSector">SECTOR-01</span>
-      </div>
-      <div class="hud-group" id="hudHpGroup">
-        <span class="hud-label">Hull Integrity</span>
-        <span class="hud-value hp" id="hudHp">100 / 100</span>
-      </div>
-      <div class="hud-group" id="hudLevelGroup">
-        <span class="hud-label">Level</span>
-        <span class="hud-value score" id="hudLevel">1</span>
-      </div>
-      <div class="hud-group" id="hudXpGroup">
-        <span class="hud-label">XP Progression</span>
-        <span class="hud-value xp" id="hudXp">0 / 30</span>
-      </div>
-      <div class="hud-group" id="hudRangeGroup">
-        <span class="hud-label">Range</span>
-        <span class="hud-value score" id="hudRange">260px</span>
-      </div>
-      <div class="hud-group" id="hudUpgradesGroup">
-        <span class="hud-label">Augments</span>
-        <span class="hud-value score" id="hudUpgrades">0</span>
-      </div>
-      <div class="hud-group" id="hudKillsGroup">
-        <span class="hud-label">Hostiles Purged</span>
-        <span class="hud-value kills" id="hudKills">0</span>
-      </div>
-      <div class="hud-group" id="hudScoreGroup">
-        <span class="hud-label">Data Score</span>
-        <span class="hud-value score" id="hudScore">0</span>
-      </div>
-    </header>
-
-    <!-- Main Canvas Viewport -->
-    <main id="canvas-container">
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
-    </main>
-
-    <!-- Diagnostic and Logging Control Panel -->
-    <footer id="diagnostics-panel">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span class="hud-version-badge" id="hudVersionBadge"><span class="hud-version-dot"></span>v1.4.0</span>
-        <span>Controls: [W][A][S][D] Move | Auto-Target | [1][2][3] Select Upgrade Card</span>
-      </div>
-      <div class="debug-controls">
-        <button type="button" class="debug-btn" id="btnTestJoker" title="Test: Guarantee Balatro Joker card on next offering">Test: Joker (1/200)</button>
-        <span>Verbosity:</span>
-        <button type="button" class="debug-btn" data-level="0" id="dbg0">0: Off</button>
-        <button type="button" class="debug-btn active" data-level="1" id="dbg1">1: Normal</button>
-        <button type="button" class="debug-btn" data-level="2" id="dbg2">2: Verbose</button>
-        <button type="button" class="debug-btn" data-level="3" id="dbg3">3: Trace</button>
-        <button type="button" class="debug-btn" data-level="4" id="dbg4">4: Flood</button>
-      </div>
-    </footer>
-  </div>
-
-  <script>
-    /* ===== src/js/01-utils.js ===== */
 /**
      * =========================================================================
      * NOT BROTATO - MINIMALIST TOP-DOWN ARENA SURVIVOR
@@ -248,3 +179,59 @@
         colors: { "2": "#b5651d", "3": "#d9a066", "1": "#7c4a1e", "0": "#f4c78a", "4": "#6b8e4e", "6": "#1a1a1a" }
       },
       joker_superposition: {
+        rows: [
+          ".....11.....",
+          "....1..1....",
+          "...1....1...",
+          "..1..22..1..",
+          ".1..2222..1.",
+          "1..222222..1",
+          "1..222222..1",
+          ".1..2222..1.",
+          "..1..22..1..",
+          "...1....1...",
+          "....1..1....",
+          ".....11....."
+        ],
+        colors: { "1": "#22d3ee", "2": "#67e8f9" }
+      }
+    };
+
+    function drawJokerPixelArt(ctx, jokerId, x, y, w, h) {
+      const def = JOKER_PIXEL_ART[jokerId];
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = "#14141a";
+      ctx.fillRect(x, y, w, h);
+
+      if (def) {
+        const rows = def.rows;
+        const cols = rows[0].length;
+        const cellW = w / cols;
+        const cellH = h / rows.length;
+        for (let ry = 0; ry < rows.length; ry++) {
+          for (let cx = 0; cx < cols; cx++) {
+            const ch = rows[ry][cx];
+            const color = def.colors[ch];
+            if (!color) continue;
+            ctx.fillStyle = color;
+            ctx.fillRect(
+              Math.round(x + cx * cellW),
+              Math.round(y + ry * cellH),
+              Math.ceil(cellW) + 1,
+              Math.ceil(cellH) + 1
+            );
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    /**
+     * =========================================================================
+     * Class: Player
+     * =========================================================================
+     * Encapsulates player state, WASD physics integration, boundaries,
+     * invulnerability frames, and auto-combat weapon attributes.
+     * =========================================================================
+     */
