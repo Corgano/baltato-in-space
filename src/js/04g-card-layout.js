@@ -47,6 +47,17 @@ UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLev
   ctx.restore();
 };
 
+// The base GameManager hotkey handler only exposes keys 1-3. Add the fourth
+// choice here without replacing the existing event binding or selection logic.
+window.addEventListener("keydown", (e) => {
+  if (e.key === "4" && window.__arenaGameInstance) {
+    const game = window.__arenaGameInstance;
+    if (game.state === "LEVEL_UP" && game.upgradeManager.activeCards.length >= 4) {
+      game.selectUpgradeByIndex(3);
+    }
+  }
+});
+
 logDebug(1, "Compact upgrade card layout enabled", {
   cardWidth: BALTTATO_CARD_BASE_WIDTH,
   cardHeight: BALTTATO_CARD_BASE_HEIGHT,
