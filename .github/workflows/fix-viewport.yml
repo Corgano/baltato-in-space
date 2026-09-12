@@ -1,0 +1,65 @@
+name: Fix viewport initialization
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix logical viewport dimensions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/js/04-game-manager.js")
+          text = path.read_text(encoding="utf-8")
+
+          old = '''        // Logical game coordinate dimensions\n        this.width = 800;\n        this.height = 600;'''
+          new = '''        // Logical game coordinate dimensions\n        this.width = 1000;\n        this.height = 750;'''
+
+          if old not in text:
+              raise SystemExit("Expected GameManager viewport block was not found; refusing to edit")
+
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          print("Updated GameManager logical viewport to 1000x750")
+          PY
+
+      - name: Build distributable
+        run: python3 tools/build.py
+
+      - name: Validate generated JavaScript
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          html = Path("dist/index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.DOTALL | re.IGNORECASE)
+          if not scripts:
+              raise SystemExit("No inline script blocks found in generated dist/index.html")
+          Path("/tmp/baltato-game.js").write_text("\n\n".join(scripts), encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline script block(s) for syntax validation")
+          PY
+          node --check /tmp/baltato-game.js
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/js/04-game-manager.js dist/index.html
+          git commit -m "Set enlarged game viewport to 1000x750"
+          git push
