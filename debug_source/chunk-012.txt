@@ -1,0 +1,250 @@
+
+            // Header pill badge: [JOKER]
+            ctx.fillStyle = card.rarityColor;
+            drawRoundedRect(ctx, r.x + r.w / 2 - 28, r.y + 10, 56, 18, 4);
+            ctx.fill();
+            ctx.font = "bold 10px monospace";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText("JOKER", r.x + r.w / 2, r.y + 19);
+
+            // Center pixel art frame
+            const artW = 144;
+            const artH = 126;
+            const artX = r.x + (r.w - artW) / 2;
+            const artY = r.y + 36;
+
+            ctx.fillStyle = "#1e1e24";
+            drawRoundedRect(ctx, artX, artY, artW, artH, 6);
+            ctx.fill();
+
+            ctx.strokeStyle = "#b59f77";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Render pixel art Joker artwork
+            const jokerImg = this.jokerImages[card.id];
+            if (jokerImg && jokerImg.complete && jokerImg.naturalWidth > 0) {
+              ctx.save();
+              ctx.imageSmoothingEnabled = false; // Pixel-perfect crispness
+              ctx.beginPath();
+              drawRoundedRect(ctx, artX + 2, artY + 2, artW - 4, artH - 4, 4);
+              ctx.clip();
+              ctx.drawImage(jokerImg, artX + 2, artY + 2, artW - 4, artH - 4);
+              ctx.restore();
+            } else {
+              ctx.save();
+              ctx.beginPath();
+              drawRoundedRect(ctx, artX + 2, artY + 2, artW - 4, artH - 4, 4);
+              ctx.clip();
+              drawJokerPixelArt(ctx, card.id, artX + 2, artY + 2, artW - 4, artH - 4);
+              ctx.restore();
+            }
+
+            // Beneath art: Card title banner (strictly no mechanics explanation on card face!)
+            ctx.fillStyle = "#f3ede0";
+            drawRoundedRect(ctx, r.x + 20, r.y + 172, r.w - 40, 26, 4);
+            ctx.fill();
+            ctx.strokeStyle = "#cbba9f";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.font = "bold 13px 'Courier New', monospace";
+            ctx.fillStyle = "#1c1917";
+            ctx.textAlign = "center";
+            ctx.fillText(card.title.toUpperCase(), r.x + r.w / 2, r.y + 185);
+
+            // Bottom action pill: Glows with rarity color on hover, dimmer when idle
+            const btnW = r.w - 36;
+            const btnH = 26;
+            const btnX = r.x + 18;
+            const btnY = r.y + r.h - 36;
+
+            ctx.save();
+            if (isHovered) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 14;
+              ctx.fillStyle = card.rarityColor;
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = "#292524";
+            }
+            drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 4);
+            ctx.fill();
+
+            if (!isHovered) {
+              ctx.strokeStyle = hexToRgba(card.rarityColor, 0.45);
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.font = "bold 11px monospace";
+            ctx.fillStyle = isHovered ? "#ffffff" : "#d6d3d1";
+            ctx.fillText(isHovered ? "SELECT JOKER" : "HOVER FOR STATS", btnX + btnW / 2, btnY + btnH / 2);
+
+            // If clipped for burn, restore the clip now and draw Balatro pixel fire frontier
+            if (isBurningThisCard) {
+              ctx.restore(); // restores burn clip
+
+              // Authentic Balatro Chunky Pixel Fire Frontier along burnLineY
+              const blockSize = 4;
+              for (let bx = r.x - 4; bx <= r.x + r.w + 4; bx += blockSize) {
+                const seed = Math.sin(bx * 0.45 + Date.now() * 0.016);
+                const flameH = 6 + Math.floor((seed + 1) * 4) + Math.floor(Math.random() * 4);
+
+                // Charred paper ash eating into unburnt edge
+                ctx.fillStyle = "#18181b";
+                ctx.fillRect(bx, burnLineY - 4, blockSize, 4);
+                if (Math.random() > 0.45) {
+                  ctx.fillStyle = "#27272a";
+                  ctx.fillRect(bx, burnLineY - 8, blockSize, 4);
+                }
+                // Crimson fiery base
+                ctx.fillStyle = "#dc2626";
+                ctx.fillRect(bx, burnLineY - 2, blockSize, flameH * 0.85);
+                // Vibrant orange flame mid
+                ctx.fillStyle = "#ea580c";
+                ctx.fillRect(bx, burnLineY - 1, blockSize, flameH * 0.6);
+                // Blazing yellow crest
+                ctx.fillStyle = "#facc15";
+                ctx.fillRect(bx, burnLineY, blockSize, flameH * 0.35);
+                // Incandescent white spark
+                if (Math.random() > 0.5) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(bx, burnLineY + 1, blockSize, 2);
+                }
+              }
+            }
+
+            ctx.restore(); // restores translate/rotate
+
+            // If card is hovered, save reference to render canvas tooltip on top of all cards
+            if (isHovered && !burnInfo?.active) {
+              activeHoveredJokerCard = card;
+              activeHoveredJokerCoord = {
+                x: i === 2 ? r.x - 275 : r.x + r.w + 14,
+                y: r.y + 10
+              };
+            }
+          } else {
+            // =================================================================
+            // STANDARD SCI-FI BROTATO-STYLE UPGRADE CARD
+            // =================================================================
+            ctx.fillStyle = isHovered ? "#162032" : "#0f172a";
+            drawRoundedRect(ctx, r.x, r.y, r.w, r.h, 6);
+            ctx.fill();
+
+            // Card outline: The border color is always the card's rarity color.
+            // When not hovered, it is dimmer and less glowy; when hovered, it shows at full glow.
+            const dimBorderColor = hexToRgba(card.rarityColor, 0.45);
+            ctx.strokeStyle = isHovered ? card.rarityColor : dimBorderColor;
+            ctx.lineWidth = isHovered ? 2.5 : 1.5;
+            if (isHovered) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 18;
+            } else {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 4;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = "transparent";
+
+            // Keyboard shortcut pill [1], [2], [3] (carefully balanced without leaked save)
+            ctx.fillStyle = "#1e293b";
+            drawRoundedRect(ctx, r.x + 12, r.y + 12, 28, 20, 3);
+            ctx.fill();
+            ctx.strokeStyle = "#475569";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.font = "bold 11px monospace";
+            ctx.fillStyle = "#f1f5f9";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`[${i + 1}]`, r.x + 26, r.y + 22);
+
+            // Rarity tag
+            ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.textAlign = "right";
+            ctx.fillStyle = card.rarityColor;
+            ctx.fillText(card.tierName, r.x + r.w - 12, r.y + 22);
+
+            // Card Title
+            ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(card.title, r.x + r.w / 2, r.y + 70);
+
+            // Dividing line
+            ctx.strokeStyle = "#1e293b";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(r.x + 16, r.y + 92);
+            ctx.lineTo(r.x + r.w - 16, r.y + 92);
+            ctx.stroke();
+
+            // Description text
+            ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.fillStyle = "#cbd5e1";
+            ctx.textAlign = "center";
+
+            const words = card.description.split(" ");
+            let line = "";
+            let lineY = r.y + 120;
+
+            for (let wIdx = 0; wIdx < words.length; wIdx++) {
+              const testLine = line + words[wIdx] + " ";
+              const metrics = ctx.measureText(testLine);
+              if (metrics.width > r.w - 30 && wIdx > 0) {
+                ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+                line = words[wIdx] + " ";
+                lineY += 18;
+              } else {
+                line = testLine;
+              }
+            }
+            ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+
+            // Action button base: Glows with full rarity color when card is hovered
+            const btnW = r.w - 32;
+            const btnH = 30;
+            const btnX = r.x + 16;
+            const btnY = r.y + r.h - 42;
+
+            ctx.save();
+            if (isHovered) {
+              // Making the click to equip button glow with the card's rarity color
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 16;
+              ctx.fillStyle = card.rarityColor;
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = "#1e293b";
+            }
+            drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 4);
+            ctx.fill();
+
+            // When not hovered, give button outline a subtle matching dim rarity color
+            if (!isHovered) {
+              ctx.strokeStyle = hexToRgba(card.rarityColor, 0.35);
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.fillStyle = isHovered ? "#000000" : "#94a3b8";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(isHovered ? "SELECT UPGRADE" : "CLICK TO EQUIP", btnX + btnW / 2, btnY + btnH / 2);
+          }
+
+          ctx.restore();
+        }
+
+        // =====================================================================
+        // AUTHENTIC BALATRO CHUNKY SQUARE PIXEL EMBER PARTICLES
+        // =====================================================================
+        if (burnInfo && burnInfo.active && burnInfo.embers && burnInfo.embers.length > 0) {
+          ctx.save();

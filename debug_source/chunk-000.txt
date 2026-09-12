@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Canvas Arena Survivor [v1.4.0]</title>
+  <meta name="description" content="A minimalist, single-file HTML5 arena survival game featuring auto-combat, level-up mechanics, and entity-managed movement. Version 1.4.0 with 4x scrolling world field, dynamic camera tracking, rebalanced projectile velocity, and color-decaying lucky XP gems." />
+  <style>
+/* -------------------------------------------------------------------------
+       CSS Reset & Architectural Layout Styles
+       Embedded directly to ensure single-file portability.
+       ------------------------------------------------------------------------- */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #080c14;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 12px;
+      max-width: 100%;
+    }
+
+    /* Primary Telemetry Header */
+    #hud-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      width: 800px;
+      max-width: 95vw;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 18px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .hud-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .hud-value {
+      font-size: 14px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #f8fafc;
+    }
+
+    .hud-value.hp {
+      color: #ef4444;
+    }
+
+    .hud-value.xp {
+      color: #34d399;
+    }
+
+    .hud-value.score {
+      color: #38bdf8;
+    }
+
+    .hud-value.kills {
+      color: #fbbf24;
+    }
+
+    .hud-action-btn {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #ffffff;
+      border: 1px solid #38bdf8;
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+      transition: background 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
+    }
+
+    .hud-action-btn:hover {
+      background: linear-gradient(135deg, #0369a1, #1d4ed8);
+      transform: scale(1.04);
+    }
+
+    .hud-action-btn:active {
+      transform: scale(0.97);
+    }
+
+    .hud-version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid #059669;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .hud-version-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 6px #10b981;
+      display: inline-block;
+    }
+
+    /* Primary HTML5 Canvas Frame */
+    #canvas-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      max-width: 95vw;
+      max-height: 72vh;
+      aspect-ratio: 800 / 600;
+      background: #090e17;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Diagnostics & Debug Bar */
+    #diagnostics-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      width: 800px;
+      max-width: 95vw;
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .debug-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .debug-btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .debug-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+      color: #ffffff;
+    }
+
+    .debug-btn.active {
+      background: #2563eb;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    /* =========================================================================
+       Balatro Joker Rack & Card Styles (Sliding Top Bar)
+       ========================================================================= */
+    #balatro-joker-rack {
+      width: 800px;
+      max-width: 95vw;
+      background: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      /* Initially completely hidden with 0 height, 0 padding, 0 opacity - 0 trace in UI */
+      max-height: 0;
+      height: 0;
+      padding: 0 16px;
+      margin: 0;
+      opacity: 0;
+      overflow: hidden;
+      border-color: transparent;
+      box-sizing: border-box;
+      transition: max-height 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.6s ease,
+                  padding 0.6s ease,
+                  border-color 0.6s ease,
+                  margin 0.6s ease;
+    }
+
+    #balatro-joker-rack.joker-rack-active {
+      max-height: 125px;
+      height: auto;
+      padding: 10px 18px;
+      opacity: 1;
+      border-color: #1e293b;
+      margin-bottom: 2px;
+    }
+

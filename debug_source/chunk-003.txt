@@ -1,0 +1,250 @@
+        rows: [
+          ".....11.....",
+          "....1..1....",
+          "...1....1...",
+          "..1..22..1..",
+          ".1..2222..1.",
+          "1..222222..1",
+          "1..222222..1",
+          ".1..2222..1.",
+          "..1..22..1..",
+          "...1....1...",
+          "....1..1....",
+          ".....11....."
+        ],
+        colors: { "1": "#22d3ee", "2": "#67e8f9" }
+      }
+    };
+
+    function drawJokerPixelArt(ctx, jokerId, x, y, w, h) {
+      const def = JOKER_PIXEL_ART[jokerId];
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = "#14141a";
+      ctx.fillRect(x, y, w, h);
+
+      if (def) {
+        const rows = def.rows;
+        const cols = rows[0].length;
+        const cellW = w / cols;
+        const cellH = h / rows.length;
+        for (let ry = 0; ry < rows.length; ry++) {
+          for (let cx = 0; cx < cols; cx++) {
+            const ch = rows[ry][cx];
+            const color = def.colors[ch];
+            if (!color) continue;
+            ctx.fillStyle = color;
+            ctx.fillRect(
+              Math.round(x + cx * cellW),
+              Math.round(y + ry * cellH),
+              Math.ceil(cellW) + 1,
+              Math.ceil(cellH) + 1
+            );
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    /**
+     * =========================================================================
+     * Class: Player
+     * =========================================================================
+     * Encapsulates player state, WASD physics integration, boundaries,
+     * invulnerability frames, and auto-combat weapon attributes.
+     * =========================================================================
+     */
+
+    /* ===== src/js/02-entities.js ===== */
+class Player {
+      /**
+       * Constructs the Player instance with default starting stats.
+       *
+       * How to call:
+       *   const player = new Player(400, 300);
+       *
+       * @param {number} x - Starting horizontal coordinate.
+       * @param {number} y - Starting vertical coordinate.
+       */
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 16;
+        this.speed = 220; // Movement speed in pixels/sec
+        this.maxHealth = 100;
+        this.health = 100;
+        this.color = "#38bdf8";
+
+        // Defensive properties
+        this.armor = 0; // Flat damage mitigation
+        this.invulnerableTimer = 0.0;
+        this.invulnerableDuration = 0.6; // Seconds of grace after taking damage
+
+        // Auto-combat weapon attributes
+        this.fireInterval = 0.55; // Fires every 550ms base
+        this.damage = 32; // Base projectile kinetic damage
+        this.projectileSpeed = BASE_PROJECTILE_SPEED; // Projectile speed in pixels/sec (340)
+        this.weaponRange = 260; // Maximum targeting acquisition and projectile flight range in pixels
+        this.multishotCount = 1; // Number of projectiles fired per cycle
+        this.pierceCount = 0; // Number of enemies projectiles can pierce through
+        this.critChance = 0.08; // Base 8% critical strike chance
+        this.critMultiplier = 2.0;
+
+        // Augmentation mechanics (Chained Hits, Ricochet, AoE blast, Life leech)
+        this.chainHits = 0; // Electric lightning bounces to nearby enemies
+        this.chainRange = 180; // Chain acquisition radius in pixels
+        this.ricochetCount = 0; // Bounces off arena perimeter walls
+        this.hasExplosiveBlast = false; // Area-of-effect blast on impact
+        this.blastRadius = 45; // Blast radius in pixels
+        this.lifeLeechChance = 0.0; // Chance on enemy kill to restore HP
+        this.fragmentation = 0; // Number of kinetic fragmentation shards spawned on final impact
+        this.luck = 0; // Starts at 0 luck; Lucky Charm increments by +1 with diminishing returns
+        this.hasSnailMailJoker = false; // Balatro Joker: Starts at 1/3 speed, accelerates, damage scales with speed
+        this.hasSuperpositionJoker = false; // Balatro Joker: Spawns quantum paired bullets with 50/50 measurement collapse
+
+        // Resource collection attributes
+        this.magnetRadius = 135; // Suction distance for dropped XP squares
+
+        // Active upgrades inventory tracking
+        this.acquiredUpgrades = [];
+        this.acquiredJokers = []; // List of active Balatro Joker objects
+
+        // Visual heading and engine pulse
+        this.facingAngle = 0;
+        this.enginePulse = 0;
+
+        logDebug(1, "Player instance created successfully", {
+          x: this.x,
+          y: this.y,
+          maxHealth: this.maxHealth,
+          speed: this.speed,
+          fireInterval: this.fireInterval,
+          damage: this.damage,
+          projectileSpeed: this.projectileSpeed,
+          luck: this.luck
+        });
+      }
+
+      /**
+       * Resets the player instance to default parameters following Game Over.
+       *
+       * How to call:
+       *   player.reset(400, 300);
+       *
+       * @param {number} startX - Target X coordinate.
+       * @param {number} startY - Target Y coordinate.
+       * @returns {void}
+       */
+      reset(startX, startY) {
+        this.x = startX;
+        this.y = startY;
+        this.maxHealth = 100;
+        this.health = 100;
+        this.speed = 220;
+        this.armor = 0;
+        this.invulnerableTimer = 0.0;
+        this.fireInterval = 0.55;
+        this.damage = 32;
+        this.projectileSpeed = BASE_PROJECTILE_SPEED;
+        this.weaponRange = 260;
+        this.multishotCount = 1;
+        this.pierceCount = 0;
+        this.critChance = 0.08;
+        this.critMultiplier = 2.0;
+        this.chainHits = 0;
+        this.chainRange = 180;
+        this.ricochetCount = 0;
+        this.hasExplosiveBlast = false;
+        this.blastRadius = 45;
+        this.lifeLeechChance = 0.0;
+        this.fragmentation = 0;
+        this.luck = 0;
+        this.hasSnailMailJoker = false;
+        this.hasSuperpositionJoker = false;
+        this.magnetRadius = 135;
+        this.acquiredUpgrades = [];
+        this.acquiredJokers = [];
+        this.facingAngle = 0;
+
+        logDebug(1, "Player parameters reset to baseline configuration");
+      }
+
+      /**
+       * Updates player position based on active WASD keys and constrains
+       * coordinates strictly within canvas arena limits.
+       *
+       * How to call:
+       *   player.update(dt, activeKeysSet, 800, 600);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {Set<string>} activeKeys - Active keyboard key codes.
+       * @param {number} arenaWidth - Logical width of arena.
+       * @param {number} arenaHeight - Logical height of arena.
+       * @returns {void}
+       */
+      update(dt, activeKeys, arenaWidth, arenaHeight) {
+        let moveX = 0;
+        let moveY = 0;
+
+        // WASD & Arrow Keys mapping
+        if (activeKeys.has("KeyW") || activeKeys.has("ArrowUp")) moveY -= 1;
+        if (activeKeys.has("KeyS") || activeKeys.has("ArrowDown")) moveY += 1;
+        if (activeKeys.has("KeyA") || activeKeys.has("ArrowLeft")) moveX -= 1;
+        if (activeKeys.has("KeyD") || activeKeys.has("ArrowRight")) moveX += 1;
+
+        // Vector normalization for diagonal movement
+        if (moveX !== 0 || moveY !== 0) {
+          const length = Math.hypot(moveX, moveY);
+          const normalizedX = moveX / length;
+          const normalizedY = moveY / length;
+
+          this.x += normalizedX * this.speed * dt;
+          this.y += normalizedY * this.speed * dt;
+
+          this.facingAngle = Math.atan2(normalizedY, normalizedX);
+          this.enginePulse += dt * 14;
+
+          logDebug(4, "Player movement vector computed", {
+            moveX: normalizedX.toFixed(2),
+            moveY: normalizedY.toFixed(2),
+            currentX: this.x.toFixed(1),
+            currentY: this.y.toFixed(1)
+          });
+        }
+
+        // Keep player strictly constrained within arena bounds
+        this.x = Math.max(this.radius, Math.min(arenaWidth - this.radius, this.x));
+        this.y = Math.max(this.radius, Math.min(arenaHeight - this.radius, this.y));
+
+        // Advance invulnerability cooldown
+        if (this.invulnerableTimer > 0) {
+          this.invulnerableTimer -= dt;
+          if (this.invulnerableTimer < 0) this.invulnerableTimer = 0;
+        }
+      }
+
+      /**
+       * Inflicts damage onto the player taking armor and invulnerability into account.
+       *
+       * How to call:
+       *   const damaged = player.takeDamage(15);
+       *
+       * @param {number} amount - Raw incoming damage.
+       * @returns {boolean} True if damage was successfully sustained.
+       */
+      takeDamage(amount) {
+        if (this.invulnerableTimer > 0) {
+          logDebug(3, "Player hit avoided via active invulnerability window");
+          return false;
+        }
+
+        const effectiveDamage = Math.max(1, amount - this.armor);
+        this.health -= effectiveDamage;
+        if (this.health < 0) this.health = 0;
+
+        this.invulnerableTimer = this.invulnerableDuration;
+
+        logDebug(1, "Player sustained damage", {
+          rawDamage: amount,
+          mitigatedByArmor: this.armor,
+          actualDamage: effectiveDamage,

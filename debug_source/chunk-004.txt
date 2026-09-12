@@ -1,0 +1,250 @@
+          remainingHealth: this.health
+        });
+
+        return true;
+      }
+
+      /**
+       * Heals player hull integrity up to the maximum capacity.
+       *
+       * How to call:
+       *   player.heal(25);
+       *
+       * @param {number} amount - Health units restored.
+       * @returns {void}
+       */
+      heal(amount) {
+        this.health = Math.min(this.maxHealth, this.health + amount);
+        logDebug(2, "Player hull repaired", { amount, currentHp: this.health, maxHp: this.maxHealth });
+      }
+
+      /**
+       * Renders player hull, engine exhaust glow, and shield indicators.
+       *
+       * How to call:
+       *   player.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Active 2D canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        // Blink visual during invulnerability grace period
+        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer * 20) % 2 === 0) {
+          return;
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Suction field indicator ring (subtle)
+        ctx.beginPath();
+        ctx.arc(0, 0, this.magnetRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Weapon engagement range indicator ring (subtle, tactical dashed perimeter)
+        ctx.beginPath();
+        ctx.setLineDash([3, 7]);
+        ctx.arc(0, 0, this.weaponRange, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(251, 191, 36, 0.12)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.rotate(this.facingAngle);
+
+        // Kinetic Thruster Flame
+        const flameOffset = Math.sin(this.enginePulse) * 3;
+        ctx.beginPath();
+        ctx.moveTo(-this.radius * 0.8, -this.radius * 0.35);
+        ctx.lineTo(-this.radius * 1.5 + flameOffset, 0);
+        ctx.lineTo(-this.radius * 0.8, this.radius * 0.35);
+        ctx.fillStyle = "#f59e0b";
+        ctx.shadowColor = "#f59e0b";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        // Hull Body - Sleek geometric combat interceptor
+        ctx.beginPath();
+        ctx.moveTo(this.radius * 1.25, 0);
+        ctx.lineTo(-this.radius * 0.85, -this.radius * 0.9);
+        ctx.lineTo(-this.radius * 0.45, 0);
+        ctx.lineTo(-this.radius * 0.85, this.radius * 0.9);
+        ctx.closePath();
+
+        ctx.fillStyle = "#0284c7";
+        ctx.fill();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        // Cockpit Core
+        ctx.beginPath();
+        ctx.arc(this.radius * 0.15, 0, this.radius * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 4;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: Enemy
+     * =========================================================================
+     * Standard hostile entity spawned around arena perimeter.
+     * Moves directly toward the player's position using Euclidean vector math.
+     * =========================================================================
+     */
+    class Enemy {
+      /**
+       * Constructs a new Enemy instance with archetype attributes.
+       *
+       * How to call:
+       *   const chaser = new Enemy(x, y, 12, 90, 30, "#f43f5e", "chaser");
+       *   const swarmer = new Enemy(x, y, 8, 145, 16, "#ec4899", "swarmer");
+       *   const shooter = new Enemy(x, y, 14, 65, 48, "#a855f7", "shooter");
+       *   const heavy = new Enemy(x, y, 20, 52, 130, "#f97316", "heavy");
+       *
+       * @param {number} x - Horizontal coordinate.
+       * @param {number} y - Vertical coordinate.
+       * @param {number} radius - Collision radius.
+       * @param {number} speed - Tracking velocity in pixels/sec.
+       * @param {number} health - Maximum hit points.
+       * @param {string} color - Primary accent render color.
+       * @param {string} enemyType - Archetype: "chaser", "swarmer", "shooter", "heavy", or "boss".
+       */
+      constructor(x, y, radius = 12, speed = 90, health = 30, color = "#f43f5e", enemyType = "chaser") {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.speed = speed;
+        this.maxHealth = health;
+        this.health = health;
+        this.color = color;
+        this.enemyType = enemyType;
+        this.isDestroyed = false;
+        this.isBoss = false;
+        this.hasDroppedLoot = false;
+
+        // Visual rotation and hit-flash indicator
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 3;
+        this.hitFlashTimer = 0.0;
+
+        // Ranged shooter tactical combat timers
+        this.fireInterval = 2.4;
+        this.fireTimer = 0.8 + Math.random() * 1.5;
+
+        logDebug(3, "Enemy initialized", {
+          type: this.enemyType,
+          spawnX: x.toFixed(1),
+          spawnY: y.toFixed(1),
+          speed: speed.toFixed(1),
+          health
+        });
+      }
+
+      /**
+       * Advances enemy position directly toward target coordinates using unit vectors.
+       * Shooters orbit at tactical distance and periodically fire plasma bolts.
+       *
+       * How to call:
+       *   enemy.update(dt, player.x, player.y, enemyProjectiles);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {number} targetX - Player horizontal position.
+       * @param {number} targetY - Player vertical position.
+       * @param {EnemyProjectile[]} [enemyProjectiles] - Array to push fired hostile bullets into.
+       * @returns {void}
+       */
+      update(dt, targetX, targetY, enemyProjectiles) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 0) {
+          const unitX = dx / dist;
+          const unitY = dy / dist;
+
+          if (this.enemyType === "shooter") {
+            // Tactical standoff: approach if far, backpedal if too close, orbit tangentially when in sweet spot
+            const idealDist = 240;
+            if (dist > idealDist + 45) {
+              this.x += unitX * this.speed * dt;
+              this.y += unitY * this.speed * dt;
+            } else if (dist < idealDist - 45) {
+              this.x -= unitX * (this.speed * 0.75) * dt;
+              this.y -= unitY * (this.speed * 0.75) * dt;
+            } else {
+              // Lateral orbit strafe
+              this.x += -unitY * (this.speed * 0.85) * dt;
+              this.y += unitX * (this.speed * 0.85) * dt;
+            }
+
+            // Periodically fire aiming plasma bolt at player
+            this.fireTimer -= dt;
+            if (this.fireTimer <= 0 && enemyProjectiles) {
+              this.fireTimer = this.fireInterval;
+              const bSpeed = 230;
+              const bvx = unitX * bSpeed;
+              const bvy = unitY * bSpeed;
+              enemyProjectiles.push(new EnemyProjectile(this.x, this.y, bvx, bvy, 5, 12, "#c084fc"));
+              logDebug(3, "Shooter enemy discharged plasma bolt", { x: this.x.toFixed(1), y: this.y.toFixed(1) });
+            }
+          } else {
+            // Direct pursuit vector (chaser, swarmer, heavy)
+            this.x += unitX * this.speed * dt;
+            this.y += unitY * this.speed * dt;
+          }
+        }
+
+        this.rotation += this.rotationSpeed * dt;
+
+        if (this.hitFlashTimer > 0) {
+          this.hitFlashTimer -= dt;
+          if (this.hitFlashTimer < 0) this.hitFlashTimer = 0;
+        }
+      }
+
+      /**
+       * Inflicts damage onto enemy and triggers visual flash.
+       * Returns boolean indicating if damage brought enemy health to zero.
+       *
+       * How to call:
+       *   const killed = enemy.takeDamage(25);
+       *
+       * @param {number} amount - Damage sustained.
+       * @returns {boolean} True if enemy health reaches zero (killed).
+       */
+      takeDamage(amount) {
+        this.health -= amount;
+        this.hitFlashTimer = 0.1;
+
+        logDebug(3, "Enemy took damage", {
+          damageReceived: amount,
+          remainingHealth: this.health
+        });
+
+        if (this.health <= 0) {
+          logDebug(2, "Enemy neutralized", { isBoss: this.isBoss, type: this.enemyType });
+          return true;
+        }
+        return false;
+      }
+
+      /**
+       * Renders enemy geometry and overhead health bar.
+       *
+       * How to call:
+       *   enemy.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Active 2D canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {

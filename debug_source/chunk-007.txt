@@ -1,0 +1,250 @@
+       * checks boundary ricochet reflections, and expires when max weapon range is reached.
+       *
+       * How to call:
+       *   proj.update(dt, 800, 600);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {number} arenaWidth - Logical width of arena.
+       * @param {number} arenaHeight - Logical height of arena.
+       * @returns {void}
+       */
+      update(dt, arenaWidth = 800, arenaHeight = 600) {
+        // Snail Mail acceleration mechanics: starts slow, accelerates over time
+        if (this.hasSnailMail) {
+          const currentSpeed = Math.hypot(this.vx, this.vy);
+          if (currentSpeed > 0 && currentSpeed < this.snailMaxSpeed) {
+            const nextSpeed = Math.min(this.snailMaxSpeed, currentSpeed + this.snailAcc * dt);
+            this.vx = (this.vx / currentSpeed) * nextSpeed;
+            this.vy = (this.vy / currentSpeed) * nextSpeed;
+          }
+        }
+
+        const stepX = this.vx * dt;
+        const stepY = this.vy * dt;
+        this.x += stepX;
+        this.y += stepY;
+        this.distanceTraveled += Math.hypot(stepX, stepY);
+
+        // Terminate projectile flight once maximum weapon range threshold is crossed
+        if (this.distanceTraveled >= this.maxRange) {
+          this.isDestroyed = true;
+          logDebug(4, "Projectile expired upon reaching maximum range", {
+            distanceTraveled: this.distanceTraveled.toFixed(1),
+            maxRange: this.maxRange
+          });
+          return;
+        }
+
+        // Execute kinetic ricochet bounce if projectile carries ricochet charges
+        if (this.ricochetRemaining > 0) {
+          let bounced = false;
+          if (this.x <= this.radius && this.vx < 0) {
+            this.x = this.radius;
+            this.vx = -this.vx;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off left boundary", { remaining: this.ricochetRemaining });
+          } else if (this.x >= arenaWidth - this.radius && this.vx > 0) {
+            this.x = arenaWidth - this.radius;
+            this.vx = -this.vx;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off right boundary", { remaining: this.ricochetRemaining });
+          }
+
+          if (this.y <= this.radius && this.vy < 0) {
+            this.y = this.radius;
+            this.vy = -this.vy;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off top boundary", { remaining: this.ricochetRemaining });
+          } else if (this.y >= arenaHeight - this.radius && this.vy > 0) {
+            this.y = arenaHeight - this.radius;
+            this.vy = -this.vy;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off bottom boundary", { remaining: this.ricochetRemaining });
+          }
+
+          if (bounced) {
+            // Grant auxiliary flight distance on successful perimeter ricochet
+            this.maxRange += 120;
+          }
+        }
+      }
+
+      /**
+       * Tests if projectile has traversed beyond arena margin limits.
+       *
+       * How to call:
+       *   if (proj.isOutOfBounds(800, 600)) { ... }
+       *
+       * @param {number} arenaWidth - Logical width.
+       * @param {number} arenaHeight - Logical height.
+       * @returns {boolean} True if outside bounds.
+       */
+      isOutOfBounds(arenaWidth, arenaHeight) {
+        const margin = 35;
+        return (
+          this.x < -margin ||
+          this.x > arenaWidth + margin ||
+          this.y < -margin ||
+          this.y > arenaHeight + margin
+        );
+      }
+
+      /**
+       * Renders projectile core, incandescent head, and distance-based dissipation.
+       *
+       * How to call:
+       *   proj.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+
+        // Smooth dissipation when projectile approaches its terminal range limit
+        const rangeRatio = this.distanceTraveled / this.maxRange;
+        if (rangeRatio > 0.8) {
+          ctx.globalAlpha = Math.max(0.1, 1 - (rangeRatio - 0.8) / 0.2);
+        }
+
+        // Snail Mail fiery propulsion trail
+        if (this.hasSnailMail) {
+          const spd = Math.hypot(this.vx, this.vy);
+          const exhaustLen = Math.min(22, (spd / 500) * 14);
+          const angle = Math.atan2(this.vy, this.vx);
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x - Math.cos(angle) * exhaustLen, this.y - Math.sin(angle) * exhaustLen);
+          ctx.strokeStyle = "#f97316";
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+
+        // Superposition quantum phase ring
+        if (this.superpositionPairId) {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+
+        // Core projectile body
+        ctx.beginPath();
+        if (this.isFragment) {
+          // Sharp diamond shard silhouette for fragmentation shrapnel
+          ctx.moveTo(this.x, this.y - this.radius);
+          ctx.lineTo(this.x + this.radius, this.y);
+          ctx.lineTo(this.x, this.y + this.radius);
+          ctx.lineTo(this.x - this.radius, this.y);
+          ctx.closePath();
+        } else {
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.isCrit ? 12 : 6;
+        ctx.fill();
+
+        // Inner incandescent core
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: EnemyProjectile
+     * =========================================================================
+     * Hazardous projectile fired by Boss entities that travels across the arena
+     * and damages the player vessel on collision.
+     * =========================================================================
+     */
+    class EnemyProjectile {
+      /**
+       * Constructs a new EnemyProjectile instance.
+       *
+       * How to call:
+       *   const eBullet = new EnemyProjectile(x, y, vx, vy, 5, 12, "#ec4899");
+       *
+       * @param {number} x - Origin X.
+       * @param {number} y - Origin Y.
+       * @param {number} vx - Horizontal velocity.
+       * @param {number} vy - Vertical velocity.
+       * @param {number} radius - Collision radius.
+       * @param {number} damage - Damage applied on hit.
+       * @param {string} color - Render color.
+       */
+      constructor(x, y, vx, vy, radius = 5, damage = 12, color = "#ec4899") {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = radius;
+        this.damage = damage;
+        this.color = color;
+        this.isDestroyed = false;
+      }
+
+      /**
+       * Advances enemy projectile by its velocity.
+       *
+       * How to call:
+       *   eBullet.update(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+      }
+
+      /**
+       * Tests if bullet has exited arena bounds.
+       *
+       * How to call:
+       *   if (eBullet.isOutOfBounds(800, 600)) { ... }
+       *
+       * @param {number} arenaWidth - Logical width.
+       * @param {number} arenaHeight - Logical height.
+       * @returns {boolean} True if outside bounds.
+       */
+      isOutOfBounds(arenaWidth, arenaHeight) {
+        const margin = 30;
+        return (
+          this.x < -margin ||
+          this.x > arenaWidth + margin ||
+          this.y < -margin ||
+          this.y > arenaHeight + margin
+        );
+      }
+
+      /**
+       * Renders the hazardous plasma bolt.
+       *
+       * How to call:
+       *   eBullet.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";

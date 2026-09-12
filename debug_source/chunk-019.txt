@@ -1,0 +1,250 @@
+            this.spawnBoss();
+          }
+        }
+
+        this.player.update(dt, this.activeKeys, this.width, this.height);
+
+        for (let i = 0; i < this.projectiles.length; i++) {
+          this.projectiles[i].update(dt, this.width, this.height);
+        }
+
+        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+          this.enemyProjectiles[i].update(dt);
+        }
+
+        for (let i = 0; i < this.enemies.length; i++) {
+          const enemy = this.enemies[i];
+          enemy.update(dt, this.player.x, this.player.y, this.enemyProjectiles);
+        }
+
+        for (let i = 0; i < this.droppedItems.length; i++) {
+          this.droppedItems[i].update(dt, this.player.x, this.player.y, this.player.magnetRadius);
+        }
+
+        for (let i = 0; i < this.floatingTexts.length; i++) {
+          this.floatingTexts[i].update(dt);
+        }
+
+        for (let i = 0; i < this.lightningArcs.length; i++) {
+          this.lightningArcs[i].update(dt);
+        }
+
+        for (let i = 0; i < this.blastEffects.length; i++) {
+          this.blastEffects[i].update(dt);
+        }
+      }
+
+      /**
+       * Refreshes DOM HUD telemetry elements.
+       *
+       * How to call:
+       *   this.updateHUD();
+       *
+       * @returns {void}
+       */
+      updateHUD() {
+        if (this.hudSector) {
+          const sectorNumber = String(Math.floor((this.playerLevel - 1) / 3) + 1).padStart(2, "0");
+          this.hudSector.textContent = `SECTOR-${sectorNumber}`;
+        }
+        if (this.hudScore) this.hudScore.textContent = this.totalScore.toString();
+        if (this.hudKills) this.hudKills.textContent = this.totalKills.toString();
+        if (this.hudHp) this.hudHp.textContent = `${this.player.health} / ${this.player.maxHealth}`;
+        if (this.hudLevel) this.hudLevel.textContent = this.playerLevel.toString();
+        if (this.hudXp) this.hudXp.textContent = `${this.currentXp} / ${this.xpThreshold}`;
+        if (this.hudRange) this.hudRange.textContent = `${Math.round(this.player.weaponRange)}px`;
+        if (this.hudUpgrades) {
+          const count = this.player.acquiredUpgrades ? this.player.acquiredUpgrades.length : 0;
+          this.hudUpgrades.textContent = count.toString();
+        }
+      }
+
+      /**
+       * Handles the moment a Balatro Joker card finishes its pickup burn
+       * animation. Reveals the (previously fully hidden, zero-footprint)
+       * joker rack above the HUD the FIRST time this ever happens — which
+       * slides the whole game area down via CSS transition on the rack's
+       * max-height/opacity/margin — then fills the next empty slot with a
+       * mini card that floats/hovers exactly like the level-up Joker cards,
+       * and wires up hover -> Balatro-style DOM tooltip.
+       *
+       * How to call:
+       *   this.onJokerAcquired(chosenJokerCard);
+       *
+       * @param {Object} card - The joker definition from UpgradeManager.jokerCatalog.
+       * @returns {void}
+       */
+      onJokerAcquired(card) {
+        if (!this.player.acquiredJokers) this.player.acquiredJokers = [];
+        this.player.acquiredJokers.push(card);
+
+        const rack = document.getElementById("balatro-joker-rack");
+        if (rack && !rack.classList.contains("joker-rack-active")) {
+          // First Joker ever acquired: reveal the rack. Up until this exact
+          // moment there has been zero DOM footprint or visual hint that
+          // this system exists at all.
+          rack.classList.add("joker-rack-active");
+          logDebug(1, "First Balatro Joker acquired — revealing joker rack (sliding game area down)", {});
+        }
+
+        const slotIndex = this.player.acquiredJokers.length - 1;
+        const slotEl = document.getElementById(`jokerSlot${slotIndex}`);
+        if (slotEl) {
+          slotEl.classList.remove("empty");
+          const variantClass = card.id === "joker_superposition" ? "superposition" : "";
+          slotEl.innerHTML = `
+            <div class="joker-mini-card ${variantClass}" data-joker-id="${card.id}">
+              <div class="joker-mini-corner top-left">J</div>
+              <canvas class="joker-mini-thumb" width="38" height="38"></canvas>
+              <div class="joker-mini-title">${card.title}</div>
+              <div class="joker-mini-corner bottom-right">J</div>
+            </div>
+          `;
+
+          const miniCanvas = slotEl.querySelector("canvas.joker-mini-thumb");
+          if (miniCanvas) {
+            drawJokerPixelArt(miniCanvas.getContext("2d"), card.id, 0, 0, 38, 38);
+          }
+
+          const cardEl = slotEl.querySelector(".joker-mini-card");
+          if (cardEl) {
+            cardEl.addEventListener("mouseenter", () => this.showJokerTooltip(card, cardEl));
+            cardEl.addEventListener("mouseleave", () => this.hideJokerTooltip());
+          }
+        }
+
+        const counterLabel = document.getElementById("jokerCountLabel");
+        if (counterLabel) counterLabel.textContent = `${this.player.acquiredJokers.length} / 5`;
+      }
+
+      /**
+       * Displays the floating Balatro-style DOM tooltip anchored beneath a
+       * hovered joker rack card, styled identically to the canvas tooltip
+       * used during the level-up card selection screen.
+       *
+       * How to call:
+       *   this.showJokerTooltip(card, cardEl);
+       *
+       * @param {Object} card - Joker definition (title, rarityTier, description).
+       * @param {HTMLElement} anchorEl - The .joker-mini-card element being hovered.
+       * @returns {void}
+       */
+      showJokerTooltip(card, anchorEl) {
+        const tooltip = document.getElementById("balatro-dom-tooltip");
+        const titleEl = document.getElementById("bTooltipTitle");
+        const descEl = document.getElementById("bTooltipDesc");
+        const rarityEl = document.getElementById("bTooltipRarity");
+        if (!tooltip || !titleEl || !descEl || !rarityEl) return;
+
+        titleEl.textContent = card.title;
+        descEl.textContent = card.description;
+        rarityEl.textContent = card.rarityTier;
+        rarityEl.className = `b-badge rarity-${card.rarityTier.toLowerCase()}`;
+
+        const rect = anchorEl.getBoundingClientRect();
+        const tooltipWidth = 260;
+        let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+        left = Math.max(8, Math.min(window.innerWidth - tooltipWidth - 8, left));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${rect.bottom + 10}px`;
+
+        tooltip.classList.remove("balatro-tooltip-hidden");
+        tooltip.classList.add("visible");
+      }
+
+      /**
+       * Hides the DOM joker tooltip.
+       *
+       * How to call:
+       *   this.hideJokerTooltip();
+       *
+       * @returns {void}
+       */
+      hideJokerTooltip() {
+        const tooltip = document.getElementById("balatro-dom-tooltip");
+        if (tooltip) tooltip.classList.remove("visible");
+      }
+
+      /**
+       * Renders the geometric coordinate background grid and top XP bar.
+       *
+       * How to call:
+       *   this.renderArenaGrid();
+       *
+       * @returns {void}
+       */
+      renderArenaGrid() {
+        this.ctx.save();
+        this.ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
+        this.ctx.lineWidth = 1;
+
+        const cellSize = 40;
+        for (let x = 0; x <= this.width; x += cellSize) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, 0);
+          this.ctx.lineTo(x, this.height);
+          this.ctx.stroke();
+        }
+        for (let y = 0; y <= this.height; y += cellSize) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, y);
+          this.ctx.lineTo(this.width, y);
+          this.ctx.stroke();
+        }
+
+        // Sleek progressive XP indicator line along top edge
+        const xpRatio = Math.min(1.0, this.currentXp / this.xpThreshold);
+        this.ctx.fillStyle = "rgba(52, 211, 153, 0.85)";
+        this.ctx.shadowColor = "#34d399";
+        this.ctx.shadowBlur = 6;
+        this.ctx.fillRect(0, 0, this.width * xpRatio, 3);
+        this.ctx.shadowBlur = 0;
+
+        this.ctx.restore();
+      }
+
+      /**
+       * Draws dynamic targeting trajectory line to the nearest hostile target center.
+       *
+       * How to call:
+       *   this.renderAimGuide();
+       *
+       * @returns {void}
+       */
+      renderAimGuide() {
+        const target = this.findNearestEnemy(this.player.weaponRange);
+        if (target.enemy !== null) {
+          this.ctx.save();
+          this.ctx.beginPath();
+          this.ctx.setLineDash([4, 6]);
+          this.ctx.moveTo(this.player.x, this.player.y);
+          this.ctx.lineTo(target.enemy.x, target.enemy.y);
+          this.ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
+          this.ctx.lineWidth = 1.5;
+          this.ctx.stroke();
+
+          // Target reticle
+          this.ctx.beginPath();
+          this.ctx.arc(target.enemy.x, target.enemy.y, target.enemy.radius + 6, 0, Math.PI * 2);
+          this.ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
+          this.ctx.lineWidth = 1.5;
+          this.ctx.stroke();
+          this.ctx.restore();
+        }
+      }
+
+      /**
+       * Renders top boss health bar when a boss encounter is active.
+       *
+       * How to call:
+       *   this.renderBossTopBar();
+       *
+       * @returns {void}
+       */
+      renderBossTopBar() {
+        if (!this.activeBoss) return;
+
+        const barW = 380;
+        const barH = 10;
+        const barX = (this.width - barW) / 2;
+        const barY = 18;

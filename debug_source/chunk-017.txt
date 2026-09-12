@@ -1,0 +1,250 @@
+        if (enemy.hasDroppedLoot) return;
+        enemy.hasDroppedLoot = true;
+        enemy.isDestroyed = true;
+        this.totalKills += 1;
+
+        // Nanite siphon life leech chance
+        if (this.player.lifeLeechChance > 0 && Math.random() < this.player.lifeLeechChance) {
+          const restored = this.player.heal(8);
+          if (restored > 0) {
+            this.floatingTexts.push(
+              new FloatingText(this.player.x, this.player.y - 20, `+${restored} HP`, "#34d399", 0.8)
+            );
+          }
+        }
+
+        // Clamp drop coordinates to ensure items always land safely within playable arena view
+        const dropX = Math.max(20, Math.min(this.width - 20, enemy.x));
+        const dropY = Math.max(20, Math.min(this.height - 20, enemy.y));
+
+        if (enemy.isBoss) {
+          this.totalScore += 1200 * enemy.tier;
+          this.activeBoss = null;
+
+          // Boss drops huge 50 XP Boss Cache (10x scaling)
+          const cache = new DroppedItem(dropX, dropY, 22, 50, true, "#fbbf24");
+          this.droppedItems.push(cache);
+          logDebug(1, "BOSS DEFEATED! Boss Cache dropped", { name: enemy.name, dropX, dropY });
+        } else {
+          // Standard enemies: XP value and score based on archetype (10x scaled)
+          let baseScore = 100;
+          let xpValue = 10;
+          let color = "#34d399";
+          let size = 12;
+
+          if (enemy.enemyType === "swarmer") {
+            baseScore = 60;
+            xpValue = 5;
+            color = "#6ee7b7";
+            size = 9;
+          } else if (enemy.enemyType === "shooter") {
+            baseScore = 180;
+            xpValue = 20;
+            color = "#38bdf8";
+            size = 14;
+          } else if (enemy.enemyType === "heavy") {
+            baseScore = 320;
+            xpValue = 40;
+            color = "#fbbf24";
+            size = 17;
+          }
+
+          this.totalScore += baseScore;
+
+          // Luck roll: very rare base rate (< 1%), scaling with diminishing returns
+          // toward ~50% as player acquires Lucky Charm upgrades (+1 luck each).
+          const baseLuckRate = 0.008; // 0.8% base rate (< 1%)
+          const maxLuckRate = 0.50; // Diminishing returns cap around 50%
+          const playerLuck = Math.max(0, this.player.luck || 0);
+          const diminishingCurve = 1 - Math.exp(-0.25 * playerLuck);
+          const luckDropChance = baseLuckRate + (maxLuckRate - baseLuckRate) * diminishingCurve;
+          const isLuckyDrop = Math.random() < luckDropChance;
+
+          if (isLuckyDrop) {
+            // Lucky drop gives 5x the normal node XP, decaying over 10s down to 1 XP
+            const luckyXpValue = xpValue * 5;
+            const luckySize = Math.round(size * 1.35);
+            const luckToken = new DroppedItem(
+              dropX,
+              dropY,
+              luckySize,
+              luckyXpValue,
+              false,
+              "#facc15",
+              true,
+              luckyXpValue,
+              10.0
+            );
+            this.droppedItems.push(luckToken);
+            this.floatingTexts.push(
+              new FloatingText(dropX, dropY - 16, "LUCKY DROP!", "#facc15", 0.9)
+            );
+            logDebug(2, "Lucky XP node dropped by enemy (5x multiplier)", {
+              dropX,
+              dropY,
+              luckyXpValue,
+              luckStat: playerLuck,
+              luckDropChance: (luckDropChance * 100).toFixed(1) + "%"
+            });
+          } else {
+            const xpSquare = new DroppedItem(dropX, dropY, size, xpValue, false, color);
+            this.droppedItems.push(xpSquare);
+            logDebug(2, "XP square dropped by defeated enemy", { dropX, dropY, xpValue });
+          }
+        }
+      }
+
+      /**
+       * Shatters a spent projectile into kinetic fragmentation shards on its
+       * final impact (after any piercing has already been consumed).
+       *
+       * Mechanics:
+       *  - Shard count == player.fragmentation.
+       *  - Each shard does diminishing damage relative to the previous one
+       *    (75% falloff per extra shard), but every shard still adds a
+       *    positive amount to total aggregate damage.
+       *  - Shards have a base 25% chance to pierce through an enemy, rising
+       *    with fragmentation investment (+10% per point above 1, capped).
+       *  - Spread angle widens with impact speed: a slow final hit produces
+       *    a tight cone of shards, a fast one sprays them wide.
+       *  - Spawns a small kinetic flash blast effect for feedback.
+       *
+       * How to call:
+       *   this.spawnFragments(proj, effectiveDamage, impactSpeed);
+       *
+       * @param {Projectile} proj - The projectile that just made its final impact.
+       * @param {number} hitDamage - The damage that projectile just dealt (post speed-scaling).
+       * @param {number} impactSpeed - The projectile's velocity magnitude at impact.
+       * @returns {void}
+       */
+      spawnFragments(proj, hitDamage, impactSpeed) {
+        const fragCount = Math.max(0, Math.round(this.player.fragmentation));
+        if (fragCount <= 0) return;
+
+        // Base 25% penetration chance, scaling with fragmentation (+10% per point above 1)
+        const basePierceChance = 0.25;
+        const pierceChance = Math.min(0.85, basePierceChance + Math.max(0, this.player.fragmentation - 1) * 0.10);
+        const spreadDeg = Math.min(150, 32 + impactSpeed * 0.05);
+        const baseAngle = Math.atan2(proj.vy, proj.vx);
+
+        // Flash detonation ring for visual clarity
+        this.blastEffects.push(new BlastEffect(proj.x, proj.y, 22, "#fb923c", 0.18));
+
+        for (let i = 0; i < fragCount; i++) {
+          const falloff = Math.pow(0.75, i); // each additional shard contributes less, but never zero
+          const fragDamage = Math.max(2, Math.round(hitDamage * 0.60 * falloff));
+          const offset = (Math.random() - 0.5) * (spreadDeg * Math.PI / 180);
+          const angle = baseAngle + offset;
+          const fragSpeed = Math.max(220, impactSpeed * 0.65);
+          
+          // Penetration roll: base 25%, scales with fragmentation
+          let shardPierce = 0;
+          if (Math.random() < pierceChance) {
+            shardPierce = 1;
+            if (pierceChance > 0.55 && Math.random() < pierceChance * 0.5) {
+              shardPierce = 2;
+            }
+          }
+
+          // Advance shard slightly along flight vector so it clears the struck entity hull
+          const spawnX = proj.x + Math.cos(angle) * 8;
+          const spawnY = proj.y + Math.sin(angle) * 8;
+
+          const shard = new Projectile(
+            spawnX,
+            spawnY,
+            Math.cos(angle) * fragSpeed,
+            Math.sin(angle) * fragSpeed,
+            4.5,
+            fragDamage,
+            shardPierce,
+            "#fb923c",
+            false,
+            0,
+            false,
+            0,
+            0,
+            340
+          );
+          shard.isFragment = true;
+          // Fragments don't re-hit the enemy they were born from on the same frame.
+          proj.hitEntities.forEach((e) => shard.hitEntities.add(e));
+          this.projectiles.push(shard);
+        }
+
+        logDebug(3, "Fragmentation shards spawned", { fragCount, pierceChance: pierceChance.toFixed(2), spreadDeg: spreadDeg.toFixed(0) });
+      }
+
+      /**
+       * Executes collision evaluations between all active entities.
+       *
+       * How to call:
+       *   this.checkCollisions();
+       *
+       * @returns {void}
+       */
+      checkCollisions() {
+        // 1. Player Projectiles vs Enemies
+        for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
+          const proj = this.projectiles[pIdx];
+          if (proj.isDestroyed) continue;
+
+          for (let eIdx = 0; eIdx < this.enemies.length; eIdx++) {
+            const enemy = this.enemies[eIdx];
+            if (enemy.isDestroyed || proj.hitEntities.has(enemy)) continue;
+
+            const dist = Math.hypot(proj.x - enemy.x, proj.y - enemy.y);
+            if (dist < proj.radius + enemy.radius) {
+              proj.hitEntities.add(enemy);
+
+              // Balatro Joker: Superposition — resolve the quantum pair the
+              // first time either twin lands a hit. This can destroy `proj`
+              // outright (the "fake" branch), so it must run before any
+              // damage/effects are applied.
+              if (proj.superpositionPairId && !proj.superpositionResolved) {
+                const twinRef = proj.twin;
+                proj.superpositionResolved = true;
+                if (twinRef) {
+                  twinRef.superpositionResolved = true;
+                  twinRef.superpositionPairId = null;
+                  twinRef.twin = null;
+                }
+                proj.superpositionPairId = null;
+                proj.twin = null;
+
+                const isReal = Math.random() < 0.5;
+                if (!isReal) {
+                  // The "fake" bullet collapses harmlessly. The twin (now
+                  // detached from superposition state above) carries on as
+                  // an ordinary projectile from this point forward.
+                  proj.isDestroyed = true;
+                  logDebug(3, "Superposition collapse: fake bullet fizzled", {});
+                  break;
+                } else if (twinRef) {
+                  // The "real" bullet deals damage; its twin fizzles out.
+                  twinRef.isDestroyed = true;
+                  logDebug(3, "Superposition collapse: real bullet confirmed, twin fizzled", {});
+                }
+              }
+
+              // Kinetic damage scales with impact speed. Regular shots get a
+              // mild bonus for exceeding baseline velocity (rewards the new
+              // Projectile Speed stat); the Snail Mail Joker gets a much
+              // steeper, exponential payoff since it's built entirely around
+              // building up speed before impact.
+              const impactSpeed = Math.hypot(proj.vx, proj.vy);
+              const speedRatio = impactSpeed / BASE_PROJECTILE_SPEED;
+              let effectiveDamage;
+              if (proj.hasSnailMail) {
+                effectiveDamage = Math.round(proj.damage * Math.pow(Math.max(speedRatio, 0.1), 1.8));
+              } else {
+                const speedBonus = Math.max(0, speedRatio - 1) * 0.4;
+                effectiveDamage = Math.round(proj.damage * (1 + speedBonus));
+              }
+              effectiveDamage = Math.max(1, effectiveDamage);
+
+              const isKilled = enemy.takeDamage(effectiveDamage);
+
+              // Floating damage text
+              this.floatingTexts.push(
+                new FloatingText(enemy.x, enemy.y - 12, `${effectiveDamage}`, proj.isCrit ? "#f59e0b" : "#ffffff", 0.6)

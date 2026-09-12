@@ -1,0 +1,250 @@
+          for (let emIdx = 0; emIdx < burnInfo.embers.length; emIdx++) {
+            const ember = burnInfo.embers[emIdx];
+            const lifeRatio = Math.max(0, ember.life / (ember.maxLife || 0.5));
+
+            // Balatro pixel color cooling shift: white -> yellow -> orange -> crimson
+            let emberColor = "#b91c1c";
+            if (lifeRatio > 0.65) emberColor = "#ffffff";
+            else if (lifeRatio > 0.4) emberColor = "#facc15";
+            else if (lifeRatio > 0.2) emberColor = "#f97316";
+
+            ctx.fillStyle = emberColor;
+            ctx.fillRect(Math.round(ember.x), Math.round(ember.y), ember.size, ember.size);
+          }
+          ctx.restore();
+        }
+
+        // =====================================================================
+        // BALATRO CANVAS HOVER TOOLTIP
+        // =====================================================================
+        if (activeHoveredJokerCard && activeHoveredJokerCoord) {
+          this.drawBalatroCanvasTooltip(
+            ctx,
+            activeHoveredJokerCard,
+            activeHoveredJokerCoord.x,
+            activeHoveredJokerCoord.y
+          );
+        }
+
+        ctx.restore();
+      }
+
+      /**
+       * Renders an authentic Balatro-style canvas tooltip when hovering over a Joker card.
+       *
+       * How to call:
+       *   upgradeMgr.drawBalatroCanvasTooltip(ctx, card, 300, 150);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas rendering context.
+       * @param {Object} card - Balatro Joker card object.
+       * @param {number} x - Left coordinate.
+       * @param {number} y - Top coordinate.
+       * @returns {void}
+       */
+      drawBalatroCanvasTooltip(ctx, card, x, y) {
+        ctx.save();
+        const tipW = 270;
+        const tipH = 205;
+
+        // Keep tooltip strictly bounded inside arena canvas
+        const drawX = Math.max(12, Math.min(800 - tipW - 12, x));
+        const drawY = Math.max(12, Math.min(600 - tipH - 12, y));
+
+        // Dark charcoal Balatro tooltip background
+        ctx.fillStyle = "#181c24";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+        ctx.shadowBlur = 24;
+        drawRoundedRect(ctx, drawX, drawY, tipW, tipH, 8);
+        ctx.fill();
+
+        // Thick solid white border
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "transparent";
+        ctx.stroke();
+
+        // Top badges row: [JOKER] + [RARITY]
+        ctx.fillStyle = "#dc2626";
+        drawRoundedRect(ctx, drawX + 14, drawY + 12, 54, 20, 4);
+        ctx.fill();
+        ctx.font = "bold 10px monospace";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("JOKER", drawX + 41, drawY + 22);
+
+        const isRare = card.rarityTier === "RARE";
+        ctx.fillStyle = isRare ? "#8b5cf6" : "#10b981";
+        drawRoundedRect(ctx, drawX + 74, drawY + 12, 82, 20, 4);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(card.rarityTier, drawX + 115, drawY + 22);
+
+        // Title
+        ctx.font = "bold 17px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(card.title, drawX + 14, drawY + 54);
+
+        // Divider
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(drawX + 14, drawY + 68);
+        ctx.lineTo(drawX + tipW - 14, drawY + 68);
+        ctx.stroke();
+
+        // Pun / Vague flavor tagline
+        ctx.font = "italic 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#fef08a";
+        ctx.fillText(`"${card.tagline}"`, drawX + 14, drawY + 86);
+
+        // Mechanics lines with high contrast highlighted stats
+        ctx.font = "11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#e2e8f0";
+
+        if (card.id === "joker_snail_mail") {
+          ctx.fillText("• Projectiles launch at 1/3 base velocity", drawX + 14, drawY + 110);
+          ctx.fillText("• Accelerates continuously during flight", drawX + 14, drawY + 128);
+          ctx.fillStyle = "#fb923c";
+          ctx.fillText("• Impact damage scales exponentially", drawX + 14, drawY + 148);
+          ctx.fillText("  with final impact velocity", drawX + 14, drawY + 164);
+        } else {
+          ctx.fillText("• Doubles projectiles into quantum pairs", drawX + 14, drawY + 110);
+          ctx.fillText("• Entangled with slight direction offset", drawX + 14, drawY + 128);
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillText("• 50% chance on hit to be the real bullet;", drawX + 14, drawY + 148);
+          ctx.fillText("  fake collapses, twin continues flying", drawX + 14, drawY + 164);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: GameManager
+     * =========================================================================
+     * Master controller for the arena survival simulation:
+     * - Delta time measurement via requestAnimationFrame
+     * - Distinct entity arrays (projectiles, enemyProjectiles, enemies, droppedItems, floatingTexts)
+     * - Auto-combat target vector acquisition targeting closest hostile center
+     * - Entity garbage collection (clean backwards splicing)
+     * - Brotato-style level up upgrade integration
+     * - Mathematical EXP leveling curve with surplus carryover
+     * - Escalating boss encounters every 3 levels with custom attack mechanics
+     * =========================================================================
+     */
+
+    /* ===== src/js/04-game-manager.js ===== */
+class GameManager {
+      /**
+       * Constructs and initializes the GameManager.
+       *
+       * How to call:
+       *   const game = new GameManager(document.getElementById("gameCanvas"));
+       *   game.init();
+       *
+       * @param {HTMLCanvasElement} canvas - The HTML5 canvas element.
+       */
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext("2d");
+
+        // Logical game coordinate dimensions
+        this.width = 800;
+        this.height = 600;
+
+        // State Machine: 'PLAYING', 'LEVEL_UP', 'GAME_OVER'
+        this.state = "PLAYING";
+
+        // Active keyboard tracking
+        this.activeKeys = new Set();
+
+        // Distinct entity collections
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.enemies = [];
+        this.droppedItems = [];
+        this.floatingTexts = [];
+        this.lightningArcs = [];
+        this.blastEffects = [];
+
+        // Player instantiation in center of arena
+        this.player = new Player(this.width / 2, this.height / 2);
+
+        // Brotato-style Upgrade System
+        this.upgradeManager = new UpgradeManager();
+
+        // Auto-combat parameters
+        this.autoFireTimer = 0.0;
+
+        // Enemy spawner parameters
+        this.spawnInterval = 1.1;
+        this.spawnTimer = 0.0;
+        this.enemySpeedBase = 90;
+
+        // Player Progression & Mathematical EXP Curve
+        this.playerLevel = 1;
+        this.currentXp = 0;
+        this.xpThreshold = this.calculateXpThreshold(1); // 3 XP for immediate level-up access
+        this.totalScore = 0;
+        this.totalKills = 0;
+
+        // Boss encounter management
+        this.bossTier = 1;
+        this.activeBoss = null;
+        this.bossWarningTimer = 0;
+
+        // High-DPI canvas scaling factor
+        this.dpr = window.devicePixelRatio || 1;
+
+        // Frame timing
+        this.lastTimestamp = 0;
+        this.animationFrameId = null;
+
+        // Pointer tracking
+        this.mouseX = 0;
+        this.mouseY = 0;
+
+        // Level-up card selection "burn" (disintegration) animation state.
+        // When active, drawOverlay renders the chosen card burning away before
+        // the upgrade is actually applied and the overlay closes. Also used
+        // to gate the Balatro Joker pickup -> rack reveal sequence.
+        this.cardBurn = {
+          active: false,
+          cardIndex: -1,
+          progress: 0,
+          embers: [],
+          pendingCard: null
+        };
+        this.cardBurnDuration = 0.55; // seconds
+
+        // DOM element references
+        this.hudSector = document.getElementById("hudSector");
+        this.hudScore = document.getElementById("hudScore");
+        this.hudKills = document.getElementById("hudKills");
+        this.hudHp = document.getElementById("hudHp");
+        this.hudLevel = document.getElementById("hudLevel");
+        this.hudXp = document.getElementById("hudXp");
+        this.hudRange = document.getElementById("hudRange");
+        this.hudUpgrades = document.getElementById("hudUpgrades");
+
+        logDebug(1, "GameManager instance initialized with Brotato upgrades and EXP leveling curve", {
+          width: this.width,
+          height: this.height,
+          initialXpThreshold: this.xpThreshold
+        });
+      }
+
+      /**
+       * Calculates the required XP threshold for a given player level.
+       * Implements a standard survivor-genre progressive curve:
+       * Early levels are fast and punchy to introduce player agency,
+       * while later levels require escalating harvesting.
+       *
+       * Curve progression (10x scaling):
+       *   Level 1: 30 XP (fast immediate level-up)
+       *   Level 2: 60 XP
+       *   Level 3: 100 XP
+       *   Level 4: 150 XP
