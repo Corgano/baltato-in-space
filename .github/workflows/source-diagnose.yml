@@ -1,0 +1,29 @@
+name: One-Time Source Diagnostic
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and show failing source
+        run: |
+          python3 tools/build.py
+          echo '--- dist lines 3818-3840 ---'
+          nl -ba dist/index.html | sed -n '3818,3840p'
+          echo '--- source file line counts ---'
+          wc -l src/js/*.js
+      - name: Remove diagnostic workflow
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/source-diagnose.yml
+          git commit -m "Remove one-time source diagnostic"
+          git push
