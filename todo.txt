@@ -7,10 +7,10 @@ P2 = balance / progression
 P3 = presentation / polish
 
 P0 — Critical gameplay fixes
-1. Fix high-speed projectile tunneling: use swept collision / equivalent continuous collision detection so fast projectiles cannot skip over small enemies between frames.
-2. Fix collision-enemy interactions: small enemies that damage the player by contact must remain hittable while overlapping the player, and a successful contact attack must also destroy the attacking enemy.
-3. Add a proper pause screen toggled by ESC. Pausing must stop gameplay simulation and display the player's current run statistics.
-4. Expand the playable field and camera system: the world should be 4x the canvas area, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 10 px beyond the field.
+1. [DONE] Fix high-speed projectile tunneling: use swept collision / equivalent continuous collision detection so fast projectiles cannot skip over small enemies between frames.
+2. [DONE] Fix collision-enemy interactions: small enemies that damage the player by contact must remain hittable while overlapping the player, and a successful contact attack must also destroy the attacking enemy.
+3. [DONE] Add a proper pause screen toggled by ESC. Pausing must stop gameplay simulation and display the player's current run statistics.
+4. [DONE] Expand the playable field and camera system: the world should be 4x the canvas area, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 10 px beyond the field.
 
 P1 — Core gameplay systems
 5. Add a player boost system and Boost upgrade:
