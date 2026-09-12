@@ -1,0 +1,81 @@
+name: Temporary Runtime Smoke Test
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: python3 tools/build.py
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Run browser smoke test
+        run: |
+          python3 -m http.server 4173 --directory dist >/tmp/server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          node <<'JS'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({headless: true});
+            const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+            const errors = [];
+            page.on('pageerror', error => errors.push(`PAGEERROR: ${error.stack || error.message}`));
+            page.on('console', message => {
+              if (message.type() === 'error') errors.push(`CONSOLE: ${message.text()}`);
+            });
+
+            await page.goto('http://127.0.0.1:4173/', { waitUntil: 'load' });
+            await page.waitForTimeout(1500);
+
+            const result = await page.evaluate(() => {
+              const canvas = document.getElementById('gameCanvas');
+              const game = window.__arenaGameInstance;
+              const ctx = canvas ? canvas.getContext('2d') : null;
+              let nonBlack = 0;
+              if (ctx && canvas) {
+                const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                for (let i = 0; i < data.length; i += 4) {
+                  if (data[i] || data[i + 1] || data[i + 2]) nonBlack++;
+                }
+              }
+              return {
+                canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
+                gameExists: !!game,
+                state: game?.state ?? null,
+                player: game?.player ? { x: game.player.x, y: game.player.y } : null,
+                world: game ? { width: game.worldWidth, height: game.worldHeight } : null,
+                nonBlack
+              };
+            });
+
+            console.log('RUNTIME RESULT:', JSON.stringify(result));
+            console.log('RUNTIME ERRORS:', JSON.stringify(errors));
+            await page.screenshot({ path: '/tmp/runtime.png', fullPage: true });
+
+            if (errors.length) throw new Error(`Browser reported ${errors.length} error(s)`);
+            if (!result.gameExists) throw new Error('GameManager instance was not created');
+            if (!result.player) throw new Error('Player was not created');
+            if (result.nonBlack < 1000) throw new Error(`Canvas appears blank: ${result.nonBlack} non-black pixels`);
+
+            await browser.close();
+          })().catch(error => {
+            console.error(error.stack || error.message);
+            process.exit(1);
+          });
+          JS
