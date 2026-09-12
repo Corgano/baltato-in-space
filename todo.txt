@@ -34,12 +34,12 @@ P1 — Core gameplay systems
    - Reroll tokens allow the player to reroll the currently offered level-up bonuses.
 
 P2 — Progression and balance
-14. Rebalance Balatro/Joker card appearance and recurrence:
+14. [DONE] Rebalance Balatro/Joker card appearance and recurrence:
    - Make Jokers more common than their current 1-in-200 offering rate.
    - Keep them rarer than the rarest normal upgrade; target roughly one-tenth of that rarest upgrade's spawn rate.
    - Ensure Joker cards can appear again later in the same run rather than effectively disappearing after one appearance.
-15. Add a Luck-based extra upgrade option: Luck should provide a diminishing-returns chance to show one additional choice when selecting an upgrade, starting from 0% and approaching a maximum 50% chance.
-16. Review and balance all new Luck curves together so their diminishing-return behavior is consistent and early Luck ranks provide noticeably more benefit than later ranks near each cap.
+15. [DONE] Add a Luck-based extra upgrade option: Luck should provide a diminishing-returns chance to show one additional choice when selecting an upgrade, starting from 0% and approaching a maximum 50% chance.
+16. [DONE] Review and balance all new Luck curves together so their diminishing-return behavior is consistent and early Luck ranks provide noticeably more benefit than later ranks near each cap.
 17. Increase the visible playing-field frame by roughly 20–30% so more of the surrounding action can be seen at once, while keeping the game usable across screen sizes.
 18. Rework enemy spawning so simultaneous enemy count increases over time (for example, beginning around 2–3 enemies at once). Clustered small enemies should spawn across a larger area, with both cluster size and spawn area increasing progressively over time.
 
