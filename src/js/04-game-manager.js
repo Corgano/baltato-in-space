@@ -2192,9 +2192,6 @@ GameManager.prototype.gameLoop = function(currentTimestamp) {
  * and reroll tokens. Kept in the existing gameplay-fix layer to avoid adding
  * another runtime script to the game. */
 
-function balttatoLuckCurve(luck, cap = 1, rate = 0.2) {
-  return cap * (1 - Math.exp(-rate * Math.max(0, Number(luck) || 0)));
-}
 
 function balttatoExplosionRanks(player) {
   return (player.acquiredUpgrades || []).filter((title) => title === "PLASMA WARHEAD").length;

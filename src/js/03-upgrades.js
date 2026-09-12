@@ -926,6 +926,13 @@ class UpgradeManager {
      */
 
 
+
+
+/* INTEGRATED: shared Luck curve helper */
+function balttatoLuckCurve(luck, cap = 1) {
+  return cap * (1 - Math.exp(-BALTTATO_LUCK_CURVE_RATE * Math.max(0, Number(luck) || 0)));
+}
+
 /* INTEGRATED: upgrade rarity, Joker recurrence, and Luck offering curves */
 /* TODO 14-16: weighted Joker rarity/recurrence and unified Luck curves. */
 
