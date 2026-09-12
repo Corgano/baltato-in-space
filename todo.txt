@@ -25,15 +25,15 @@ P0 — Critical gameplay fixes
 4. [DONE] Expand the playable field and camera system: the world should be 4x the canvas area, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 15 px beyond the field.
 
 P1 — Core gameplay systems
-5. Add a player boost system and Boost upgrade:
+5. [DONE] Add a player boost system and Boost upgrade:
    - Add a boost resource/value that starts at 0.
    - The boost meter is hidden while boost is 0 and appears when boost is available.
    - Holding SHIFT while moving consumes boost.
    - Boost movement speed should be about +100% over normal movement speed.
    - Boost upgrades increase the player's available boost capacity/amount.
-6. Add health and boost meters to the upper-left HUD. Health should be a visual gauge; the boost gauge should use a distinct color (blue suggested) and only appear when boost is available.
+6. [DONE] Add health and boost meters to the upper-left HUD. Health should be a visual gauge; the boost gauge should use a distinct color (blue suggested) and only appear when boost is available.
 7. Improve enemy projectile readability: all enemy bullets should be red or pink, and higher-damage bullets should be visibly larger or otherwise clearly marked as more dangerous.
-8. Replace the boss charge telegraph's effectively fixed long line with a telegraph that clearly indicates the actual charge distance the boss intends to travel.
+8. [DONE] Replace the boss charge telegraph's effectively fixed long line with a telegraph that clearly indicates the actual charge distance the boss intends to travel.
 9. [DONE] Make the explosion/shockwave effect capable of hitting large enemies multiple times as the expanding wave passes through them, rather than limiting each enemy to a single hit when appropriate.
 10. [DONE] Add explosion-chain behavior: enemies killed by explosions can trigger additional explosions. The chance should depend on both Luck and the number of Explosion/Plasma Warhead ranks, with roughly 10 Explosion ranks reaching a 50% base chance and Luck eventually allowing the chance to reach 100%.
 11. [DONE] Add fragmentation-on-penetration synergy: when both Fragmentation and Penetration are owned, penetrating projectiles can spawn fragmentation shards while passing through enemies. Limit the number of spawned fragments to the player's Fragmentation level. The per-fragment spawn chance should curve from 5% toward a 75% cap and scale with Luck using diminishing returns.
@@ -56,5 +56,5 @@ P2 — Progression and balance
 18. [DONE] Rework enemy spawning so simultaneous enemy count increases over time (for example, beginning around 2–3 enemies at once). Clustered small enemies should spawn across a larger area, with both cluster size and spawn area increasing progressively over time.
 
 P3 — Presentation / polish
-19. Review the new health/boost HUD layout together with the enlarged playfield so the gauges remain easy to read without obscuring gameplay.
+19. [DONE] Review the new health/boost HUD layout together with the enlarged playfield so the gauges remain easy to read without obscuring gameplay.
 20. Review boss charge, enemy bullet, explosion, fragmentation, chain-lightning, and reroll visuals together after the mechanics are implemented so each mechanic has a distinct and readable visual indicator.
