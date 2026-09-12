@@ -1,0 +1,5228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Canvas Arena Survivor [v1.4.0]</title>
+  <meta name="description" content="A minimalist, single-file HTML5 arena survival game featuring auto-combat, level-up mechanics, and entity-managed movement. Version 1.4.0 with 4x scrolling world field, dynamic camera tracking, rebalanced projectile velocity, and color-decaying lucky XP gems." />
+  <style>
+/* -------------------------------------------------------------------------
+       CSS Reset & Architectural Layout Styles
+       Embedded directly to ensure single-file portability.
+       ------------------------------------------------------------------------- */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: #080c14;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 12px;
+      max-width: 100%;
+    }
+
+    /* Primary Telemetry Header */
+    #hud-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      width: 800px;
+      max-width: 95vw;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 18px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .hud-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .hud-value {
+      font-size: 14px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #f8fafc;
+    }
+
+    .hud-value.hp {
+      color: #ef4444;
+    }
+
+    .hud-value.xp {
+      color: #34d399;
+    }
+
+    .hud-value.score {
+      color: #38bdf8;
+    }
+
+    .hud-value.kills {
+      color: #fbbf24;
+    }
+
+    .hud-action-btn {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #ffffff;
+      border: 1px solid #38bdf8;
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+      transition: background 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
+    }
+
+    .hud-action-btn:hover {
+      background: linear-gradient(135deg, #0369a1, #1d4ed8);
+      transform: scale(1.04);
+    }
+
+    .hud-action-btn:active {
+      transform: scale(0.97);
+    }
+
+    .hud-version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid #059669;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .hud-version-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 6px #10b981;
+      display: inline-block;
+    }
+
+    /* Primary HTML5 Canvas Frame */
+    #canvas-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      max-width: 95vw;
+      max-height: 72vh;
+      aspect-ratio: 800 / 600;
+      background: #090e17;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Diagnostics & Debug Bar */
+    #diagnostics-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      width: 800px;
+      max-width: 95vw;
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .debug-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .debug-btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .debug-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+      color: #ffffff;
+    }
+
+    .debug-btn.active {
+      background: #2563eb;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    /* =========================================================================
+       Balatro Joker Rack & Card Styles (Sliding Top Bar)
+       ========================================================================= */
+    #balatro-joker-rack {
+      width: 800px;
+      max-width: 95vw;
+      background: #090e17;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      /* Initially completely hidden with 0 height, 0 padding, 0 opacity - 0 trace in UI */
+      max-height: 0;
+      height: 0;
+      padding: 0 16px;
+      margin: 0;
+      opacity: 0;
+      overflow: hidden;
+      border-color: transparent;
+      box-sizing: border-box;
+      transition: max-height 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.6s ease,
+                  padding 0.6s ease,
+                  border-color 0.6s ease,
+                  margin 0.6s ease;
+    }
+
+    #balatro-joker-rack.joker-rack-active {
+      max-height: 125px;
+      height: auto;
+      padding: 10px 18px;
+      opacity: 1;
+      border-color: #1e293b;
+      margin-bottom: 2px;
+    }
+
+    .joker-rack-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 16px;
+    }
+
+    .joker-rack-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 85px;
+    }
+
+    .joker-rack-tag {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: #ef4444;
+      text-transform: uppercase;
+      font-family: monospace;
+    }
+
+    .joker-rack-counter {
+      font-size: 13px;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+
+    .joker-slots {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      justify-content: flex-start;
+    }
+
+    .joker-slot {
+      width: 58px;
+      height: 80px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      perspective: 600px;
+    }
+
+    .joker-slot.empty {
+      border: 1.5px dashed rgba(71, 85, 105, 0.35);
+      background: rgba(15, 23, 42, 0.45);
+    }
+
+    .joker-mini-card {
+      width: 54px;
+      height: 76px;
+      border-radius: 6px;
+      background: #faf6ee;
+      border: 2px solid #c83232;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 0 1px #eedfc8;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px;
+      box-sizing: border-box;
+      transform-origin: center center;
+      animation: balatroCardFloat 3.2s ease-in-out infinite;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+    }
+
+    .joker-mini-card:hover {
+      transform: translateY(-8px) scale(1.08) !important;
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.45), 0 0 12px rgba(255, 255, 255, 0.4);
+      z-index: 50;
+    }
+
+    .joker-mini-card.superposition {
+      border-color: #06b6d4;
+    }
+
+    @keyframes balatroCardFloat {
+      0%, 100% {
+        transform: translateY(0px) rotate(-1deg);
+      }
+      50% {
+        transform: translateY(-4px) rotate(1deg);
+      }
+    }
+
+    .joker-mini-corner {
+      position: absolute;
+      font-size: 8px;
+      font-weight: 900;
+      font-family: monospace;
+      color: #c83232;
+      line-height: 1;
+    }
+
+    .joker-mini-corner.top-left {
+      top: 3px;
+      left: 3px;
+    }
+
+    .joker-mini-corner.bottom-right {
+      bottom: 3px;
+      right: 3px;
+      transform: rotate(180deg);
+    }
+
+    .joker-mini-thumb {
+      width: 38px;
+      height: 38px;
+      border-radius: 3px;
+      object-fit: cover;
+      margin-top: 8px;
+      image-rendering: pixelated;
+      border: 1px solid #d4b27c;
+    }
+
+    .joker-mini-title {
+      font-size: 7px;
+      font-weight: 800;
+      font-family: monospace;
+      text-transform: uppercase;
+      color: #1e293b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 48px;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+
+    /* Balatro Pixelated Floating Tooltip */
+    #balatro-dom-tooltip {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      background: #181c24;
+      border: 2px solid #ffffff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      width: 260px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85), 0 0 14px rgba(255, 255, 255, 0.2);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      box-sizing: border-box;
+      opacity: 0;
+      transform: scale(0.94);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    #balatro-dom-tooltip.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .b-tooltip-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .b-badge {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-family: monospace;
+    }
+
+    .b-badge.joker {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    .b-badge.rarity-uncommon {
+      background: #10b981;
+      color: #ffffff;
+    }
+
+    .b-badge.rarity-rare {
+      background: #8b5cf6;
+      color: #ffffff;
+    }
+
+    .b-tooltip-title {
+      font-size: 15px;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    .b-tooltip-divider {
+      height: 1px;
+      background: #334155;
+      margin-bottom: 8px;
+    }
+
+    .b-tooltip-desc {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    .b-highlight-yellow {
+      color: #fbbf24;
+      font-weight: 700;
+    }
+
+    .b-highlight-cyan {
+      color: #38bdf8;
+      font-weight: 700;
+    }
+
+    .b-highlight-red {
+      color: #f87171;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Secret Balatro Joker Rack (Initially completely hidden with 0 height until first Joker is obtained) -->
+    <section id="balatro-joker-rack" class="joker-rack-hidden">
+      <div class="joker-rack-container">
+        <div class="joker-rack-label">
+          <span class="joker-rack-tag">JOKERS</span>
+          <span class="joker-rack-counter" id="jokerCountLabel">0 / 5</span>
+        </div>
+        <div class="joker-slots" id="jokerSlotsContainer">
+          <div class="joker-slot empty" id="jokerSlot0"></div>
+          <div class="joker-slot empty" id="jokerSlot1"></div>
+          <div class="joker-slot empty" id="jokerSlot2"></div>
+          <div class="joker-slot empty" id="jokerSlot3"></div>
+          <div class="joker-slot empty" id="jokerSlot4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Floating Balatro Tooltip Overlay for DOM Elements -->
+    <div id="balatro-dom-tooltip" class="balatro-tooltip-hidden">
+      <div class="b-tooltip-header">
+        <span class="b-badge joker">JOKER</span>
+        <span class="b-badge rarity-uncommon" id="bTooltipRarity">UNCOMMON</span>
+      </div>
+      <div class="b-tooltip-title" id="bTooltipTitle">Snail Mail</div>
+      <div class="b-tooltip-divider"></div>
+      <div class="b-tooltip-desc" id="bTooltipDesc"></div>
+    </div>
+
+    <!-- Heads-Up Display Telemetry Bar -->
+    <header id="hud-panel">
+      <div class="hud-group" id="hudSectorGroup">
+        <span class="hud-label">Sector</span>
+        <span class="hud-value score" id="hudSector">SECTOR-01</span>
+      </div>
+      <div class="hud-group" id="hudHpGroup">
+        <span class="hud-label">Hull Integrity</span>
+        <span class="hud-value hp" id="hudHp">100 / 100</span>
+      </div>
+      <div class="hud-group" id="hudLevelGroup">
+        <span class="hud-label">Level</span>
+        <span class="hud-value score" id="hudLevel">1</span>
+      </div>
+      <div class="hud-group" id="hudXpGroup">
+        <span class="hud-label">XP Progression</span>
+        <span class="hud-value xp" id="hudXp">0 / 30</span>
+      </div>
+      <div class="hud-group" id="hudRangeGroup">
+        <span class="hud-label">Range</span>
+        <span class="hud-value score" id="hudRange">260px</span>
+      </div>
+      <div class="hud-group" id="hudUpgradesGroup">
+        <span class="hud-label">Augments</span>
+        <span class="hud-value score" id="hudUpgrades">0</span>
+      </div>
+      <div class="hud-group" id="hudKillsGroup">
+        <span class="hud-label">Hostiles Purged</span>
+        <span class="hud-value kills" id="hudKills">0</span>
+      </div>
+      <div class="hud-group" id="hudScoreGroup">
+        <span class="hud-label">Data Score</span>
+        <span class="hud-value score" id="hudScore">0</span>
+      </div>
+    </header>
+
+    <!-- Main Canvas Viewport -->
+    <main id="canvas-container">
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </main>
+
+    <!-- Diagnostic and Logging Control Panel -->
+    <footer id="diagnostics-panel">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="hud-version-badge" id="hudVersionBadge"><span class="hud-version-dot"></span>v1.4.0</span>
+        <span>Controls: [W][A][S][D] Move | Auto-Target | [1][2][3] Select Upgrade Card</span>
+      </div>
+      <div class="debug-controls">
+        <button type="button" class="debug-btn" id="btnTestJoker" title="Test: Guarantee Balatro Joker card on next offering">Test: Joker (1/200)</button>
+        <span>Verbosity:</span>
+        <button type="button" class="debug-btn" data-level="0" id="dbg0">0: Off</button>
+        <button type="button" class="debug-btn active" data-level="1" id="dbg1">1: Normal</button>
+        <button type="button" class="debug-btn" data-level="2" id="dbg2">2: Verbose</button>
+        <button type="button" class="debug-btn" data-level="3" id="dbg3">3: Trace</button>
+        <button type="button" class="debug-btn" data-level="4" id="dbg4">4: Flood</button>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    /* ===== src/js/01-utils.js ===== */
+/**
+     * =========================================================================
+     * NOT BROTATO - MINIMALIST TOP-DOWN ARENA SURVIVOR
+     * =========================================================================
+     * Architecture: Single-file native HTML5 Canvas application.
+     * Core Mechanics:
+     * 1. requestAnimationFrame loop with clamped delta-time calculations.
+     * 2. Player entity managed with WASD keyboard input constrained to bounds.
+     * 3. Autonomous target acquisition targeting nearest hostile entity center.
+     * 4. Multi-entity arrays with safe garbage collection (backwards splicing).
+     * 5. Brotato-style card selection upgrade system triggered on Level Up.
+     * 6. Progressive mathematical EXP leveling curve with surplus carryover.
+     * 7. Escalating Boss entities every 3 levels with bullet hell attack patterns.
+     * 8. Five-tier logging system controlled by an integer debug flag.
+     * =========================================================================
+     */
+
+    /**
+     * Global Diagnostic Verbosity Level:
+     * 0 = Errors only
+     * 1 = Normal running / major milestones
+     * 2 = Light debugging / verbose execution
+     * 3 = Debug mode / telemetry comments
+     * 4 = Flood console / frame-level inspection
+     */
+    let DEBUG_LEVEL = 1;
+
+    /**
+     * Reference baseline weapon targeting acquisition range in pixels.
+     * Range upgrades scale additively as a percentage of this base value
+     * (e.g. +20% of base range = +52px), creating steady, predictable
+     * increases with natural diminishing relative returns as range climbs.
+     */
+    const BASE_WEAPON_RANGE = 260;
+
+    /**
+     * Ceiling cap for weapon targeting acquisition range in pixels.
+     */
+    const RANGE_SOFT_CAP = 680;
+
+    /**
+     * Reference projectile speed used as the 1.0x baseline for speed-based
+     * damage scaling. Player.projectileSpeed starts at this value. Slower base
+     * velocity ensures that speed upgrades and acceleration feel pronounced.
+     */
+    const BASE_PROJECTILE_SPEED = 340;
+
+    /**
+     * Maximum distance a normal projectile can travel before it despawns.
+     * This is intentionally decoupled from player.weaponRange: weaponRange
+     * only gates target ACQUISITION (how far the auto-turret will look for
+     * an enemy to shoot at). Once fired, a projectile flies until it leaves
+     * the arena or reaches this generous flight ceiling, so range upgrades
+     * no longer feel like they are clipping bullets out of the air.
+     */
+    const PROJECTILE_FLIGHT_RANGE = 2000;
+
+    /**
+     * Centralized diagnostic logger conforming to strict verbosity tiers.
+     *
+     * How to call:
+     *   logDebug(1, "Player initialized", { x: 100, y: 100 });
+     *
+     * @param {number} level - Required threshold integer (0 to 4).
+     * @param {string} message - Primary log description.
+     * @param {any} [data] - Optional contextual metadata.
+     * @returns {void}
+     */
+    function logDebug(level, message, data) {
+      if (level > DEBUG_LEVEL) return;
+
+      const prefix = `[ARENA-DEBUG L${level}]`;
+      if (level === 0) {
+        if (data !== undefined) console.error(`${prefix} ${message}`, data);
+        else console.error(`${prefix} ${message}`);
+      } else if (level === 1) {
+        if (data !== undefined) console.info(`${prefix} ${message}`, data);
+        else console.info(`${prefix} ${message}`);
+      } else {
+        if (data !== undefined) console.log(`${prefix} ${message}`, data);
+        else console.log(`${prefix} ${message}`);
+      }
+    }
+
+    /**
+     * Safely constructs a rounded rectangle path onto the 2D canvas context.
+     * Guaranteed compatibility across all browser engines without relying on
+     * the modern CanvasRenderingContext2D.prototype.roundRect method.
+     *
+     * How to call:
+     *   drawRoundedRect(ctx, 50, 50, 200, 100, 8);
+     *   ctx.fill();
+     *
+     * @param {CanvasRenderingContext2D} ctx - Target 2D rendering context.
+     * @param {number} x - Horizontal upper-left origin coordinate.
+     * @param {number} y - Vertical upper-left origin coordinate.
+     * @param {number} w - Rectangle bounding width in pixels.
+     * @param {number} h - Rectangle bounding height in pixels.
+     * @param {number} r - Corner radius in pixels.
+     * @returns {void}
+     */
+    function drawRoundedRect(ctx, x, y, w, h, r) {
+      if (r > w / 2) r = w / 2;
+      if (r > h / 2) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    /**
+     * Converts a 3 or 6 character hexadecimal color string into an rgba(...) CSS color string.
+     * Used to produce dimmed, semi-transparent variations of rarity colors for card borders
+     * and non-hovered UI elements.
+     *
+     * How to call:
+     *   const dimColor = hexToRgba("#38bdf8", 0.45);
+     *
+     * @param {string} hex - Hexadecimal color code (e.g. "#38bdf8").
+     * @param {number} alpha - Opacity fraction from 0.0 to 1.0.
+     * @returns {string} RGBA formatted color string (e.g. "rgba(56, 189, 248, 0.45)").
+     */
+    function hexToRgba(hex, alpha) {
+      if (!hex || typeof hex !== "string" || !hex.startsWith("#")) {
+        return hex;
+      }
+      let c = hex.slice(1);
+      if (c.length === 3) {
+        c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+      }
+      if (c.length !== 6) {
+        return hex;
+      }
+      const r = parseInt(c.substring(0, 2), 16);
+      const g = parseInt(c.substring(2, 4), 16);
+      const b = parseInt(c.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    /**
+     * Draws small, deliberately blocky/pixelated procedural artwork for a
+     * Balatro Joker onto a 2D canvas context. Used both for the joker rack's
+     * mini-card thumbnail and for the big level-up card face (this build
+     * generates its own joker art rather than loading external image files).
+     *
+     * How to call:
+     *   drawJokerPixelArt(ctx, "joker_snail_mail", 0, 0, 38, 38);
+     *
+     * @param {CanvasRenderingContext2D} ctx - Target context.
+     * @param {string} jokerId - Joker catalog id.
+     * @param {number} x - Destination x.
+     * @param {number} y - Destination y.
+     * @param {number} w - Destination width.
+     * @param {number} h - Destination height.
+     * @returns {void}
+     */
+    const JOKER_PIXEL_ART = {
+      joker_snail_mail: {
+        rows: [
+          "....2222......",
+          "...233332.....",
+          "..231111132...",
+          "..2311..032...",
+          "..2311..032...",
+          "..2311003222..",
+          "..22333323322.",
+          "...444444444..",
+          "..44444444444.",
+          ".4444444444444",
+          "64..........46"
+        ],
+        colors: { "2": "#b5651d", "3": "#d9a066", "1": "#7c4a1e", "0": "#f4c78a", "4": "#6b8e4e", "6": "#1a1a1a" }
+      },
+      joker_superposition: {
+        rows: [
+          ".....11.....",
+          "....1..1....",
+          "...1....1...",
+          "..1..22..1..",
+          ".1..2222..1.",
+          "1..222222..1",
+          "1..222222..1",
+          ".1..2222..1.",
+          "..1..22..1..",
+          "...1....1...",
+          "....1..1....",
+          ".....11....."
+        ],
+        colors: { "1": "#22d3ee", "2": "#67e8f9" }
+      }
+    };
+
+    function drawJokerPixelArt(ctx, jokerId, x, y, w, h) {
+      const def = JOKER_PIXEL_ART[jokerId];
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = "#14141a";
+      ctx.fillRect(x, y, w, h);
+
+      if (def) {
+        const rows = def.rows;
+        const cols = rows[0].length;
+        const cellW = w / cols;
+        const cellH = h / rows.length;
+        for (let ry = 0; ry < rows.length; ry++) {
+          for (let cx = 0; cx < cols; cx++) {
+            const ch = rows[ry][cx];
+            const color = def.colors[ch];
+            if (!color) continue;
+            ctx.fillStyle = color;
+            ctx.fillRect(
+              Math.round(x + cx * cellW),
+              Math.round(y + ry * cellH),
+              Math.ceil(cellW) + 1,
+              Math.ceil(cellH) + 1
+            );
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    /**
+     * =========================================================================
+     * Class: Player
+     * =========================================================================
+     * Encapsulates player state, WASD physics integration, boundaries,
+     * invulnerability frames, and auto-combat weapon attributes.
+     * =========================================================================
+     */
+
+    /* ===== src/js/02-entities.js ===== */
+class Player {
+      /**
+       * Constructs the Player instance with default starting stats.
+       *
+       * How to call:
+       *   const player = new Player(400, 300);
+       *
+       * @param {number} x - Starting horizontal coordinate.
+       * @param {number} y - Starting vertical coordinate.
+       */
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 16;
+        this.speed = 220; // Movement speed in pixels/sec
+        this.maxHealth = 100;
+        this.health = 100;
+        this.color = "#38bdf8";
+
+        // Defensive properties
+        this.armor = 0; // Flat damage mitigation
+        this.invulnerableTimer = 0.0;
+        this.invulnerableDuration = 0.6; // Seconds of grace after taking damage
+
+        // Auto-combat weapon attributes
+        this.fireInterval = 0.55; // Fires every 550ms base
+        this.damage = 32; // Base projectile kinetic damage
+        this.projectileSpeed = BASE_PROJECTILE_SPEED; // Projectile speed in pixels/sec (340)
+        this.weaponRange = 260; // Maximum targeting acquisition and projectile flight range in pixels
+        this.multishotCount = 1; // Number of projectiles fired per cycle
+        this.pierceCount = 0; // Number of enemies projectiles can pierce through
+        this.critChance = 0.08; // Base 8% critical strike chance
+        this.critMultiplier = 2.0;
+
+        // Augmentation mechanics (Chained Hits, Ricochet, AoE blast, Life leech)
+        this.chainHits = 0; // Electric lightning bounces to nearby enemies
+        this.chainRange = 180; // Chain acquisition radius in pixels
+        this.ricochetCount = 0; // Bounces off arena perimeter walls
+        this.hasExplosiveBlast = false; // Area-of-effect blast on impact
+        this.blastRadius = 45; // Blast radius in pixels
+        this.lifeLeechChance = 0.0; // Chance on enemy kill to restore HP
+        this.fragmentation = 0; // Number of kinetic fragmentation shards spawned on final impact
+        this.luck = 0; // Starts at 0 luck; Lucky Charm increments by +1 with diminishing returns
+        this.hasSnailMailJoker = false; // Balatro Joker: Starts at 1/3 speed, accelerates, damage scales with speed
+        this.hasSuperpositionJoker = false; // Balatro Joker: Spawns quantum paired bullets with 50/50 measurement collapse
+
+        // Resource collection attributes
+        this.magnetRadius = 135; // Suction distance for dropped XP squares
+
+        // Active upgrades inventory tracking
+        this.acquiredUpgrades = [];
+        this.acquiredJokers = []; // List of active Balatro Joker objects
+
+        // Visual heading and engine pulse
+        this.facingAngle = 0;
+        this.enginePulse = 0;
+
+        logDebug(1, "Player instance created successfully", {
+          x: this.x,
+          y: this.y,
+          maxHealth: this.maxHealth,
+          speed: this.speed,
+          fireInterval: this.fireInterval,
+          damage: this.damage,
+          projectileSpeed: this.projectileSpeed,
+          luck: this.luck
+        });
+      }
+
+      /**
+       * Resets the player instance to default parameters following Game Over.
+       *
+       * How to call:
+       *   player.reset(400, 300);
+       *
+       * @param {number} startX - Target X coordinate.
+       * @param {number} startY - Target Y coordinate.
+       * @returns {void}
+       */
+      reset(startX, startY) {
+        this.x = startX;
+        this.y = startY;
+        this.maxHealth = 100;
+        this.health = 100;
+        this.speed = 220;
+        this.armor = 0;
+        this.invulnerableTimer = 0.0;
+        this.fireInterval = 0.55;
+        this.damage = 32;
+        this.projectileSpeed = BASE_PROJECTILE_SPEED;
+        this.weaponRange = 260;
+        this.multishotCount = 1;
+        this.pierceCount = 0;
+        this.critChance = 0.08;
+        this.critMultiplier = 2.0;
+        this.chainHits = 0;
+        this.chainRange = 180;
+        this.ricochetCount = 0;
+        this.hasExplosiveBlast = false;
+        this.blastRadius = 45;
+        this.lifeLeechChance = 0.0;
+        this.fragmentation = 0;
+        this.luck = 0;
+        this.hasSnailMailJoker = false;
+        this.hasSuperpositionJoker = false;
+        this.magnetRadius = 135;
+        this.acquiredUpgrades = [];
+        this.acquiredJokers = [];
+        this.facingAngle = 0;
+
+        logDebug(1, "Player parameters reset to baseline configuration");
+      }
+
+      /**
+       * Updates player position based on active WASD keys and constrains
+       * coordinates strictly within canvas arena limits.
+       *
+       * How to call:
+       *   player.update(dt, activeKeysSet, 800, 600);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {Set<string>} activeKeys - Active keyboard key codes.
+       * @param {number} arenaWidth - Logical width of arena.
+       * @param {number} arenaHeight - Logical height of arena.
+       * @returns {void}
+       */
+      update(dt, activeKeys, arenaWidth, arenaHeight) {
+        let moveX = 0;
+        let moveY = 0;
+
+        // WASD & Arrow Keys mapping
+        if (activeKeys.has("KeyW") || activeKeys.has("ArrowUp")) moveY -= 1;
+        if (activeKeys.has("KeyS") || activeKeys.has("ArrowDown")) moveY += 1;
+        if (activeKeys.has("KeyA") || activeKeys.has("ArrowLeft")) moveX -= 1;
+        if (activeKeys.has("KeyD") || activeKeys.has("ArrowRight")) moveX += 1;
+
+        // Vector normalization for diagonal movement
+        if (moveX !== 0 || moveY !== 0) {
+          const length = Math.hypot(moveX, moveY);
+          const normalizedX = moveX / length;
+          const normalizedY = moveY / length;
+
+          this.x += normalizedX * this.speed * dt;
+          this.y += normalizedY * this.speed * dt;
+
+          this.facingAngle = Math.atan2(normalizedY, normalizedX);
+          this.enginePulse += dt * 14;
+
+          logDebug(4, "Player movement vector computed", {
+            moveX: normalizedX.toFixed(2),
+            moveY: normalizedY.toFixed(2),
+            currentX: this.x.toFixed(1),
+            currentY: this.y.toFixed(1)
+          });
+        }
+
+        // Keep player strictly constrained within arena bounds
+        this.x = Math.max(this.radius, Math.min(arenaWidth - this.radius, this.x));
+        this.y = Math.max(this.radius, Math.min(arenaHeight - this.radius, this.y));
+
+        // Advance invulnerability cooldown
+        if (this.invulnerableTimer > 0) {
+          this.invulnerableTimer -= dt;
+          if (this.invulnerableTimer < 0) this.invulnerableTimer = 0;
+        }
+      }
+
+      /**
+       * Inflicts damage onto the player taking armor and invulnerability into account.
+       *
+       * How to call:
+       *   const damaged = player.takeDamage(15);
+       *
+       * @param {number} amount - Raw incoming damage.
+       * @returns {boolean} True if damage was successfully sustained.
+       */
+      takeDamage(amount) {
+        if (this.invulnerableTimer > 0) {
+          logDebug(3, "Player hit avoided via active invulnerability window");
+          return false;
+        }
+
+        const effectiveDamage = Math.max(1, amount - this.armor);
+        this.health -= effectiveDamage;
+        if (this.health < 0) this.health = 0;
+
+        this.invulnerableTimer = this.invulnerableDuration;
+
+        logDebug(1, "Player sustained damage", {
+          rawDamage: amount,
+          mitigatedByArmor: this.armor,
+          actualDamage: effectiveDamage,
+          remainingHealth: this.health
+        });
+
+        return true;
+      }
+
+      /**
+       * Heals player hull integrity up to the maximum capacity.
+       *
+       * How to call:
+       *   player.heal(25);
+       *
+       * @param {number} amount - Health units restored.
+       * @returns {void}
+       */
+      heal(amount) {
+        this.health = Math.min(this.maxHealth, this.health + amount);
+        logDebug(2, "Player hull repaired", { amount, currentHp: this.health, maxHp: this.maxHealth });
+      }
+
+      /**
+       * Renders player hull, engine exhaust glow, and shield indicators.
+       *
+       * How to call:
+       *   player.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Active 2D canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        // Blink visual during invulnerability grace period
+        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer * 20) % 2 === 0) {
+          return;
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Suction field indicator ring (subtle)
+        ctx.beginPath();
+        ctx.arc(0, 0, this.magnetRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Weapon engagement range indicator ring (subtle, tactical dashed perimeter)
+        ctx.beginPath();
+        ctx.setLineDash([3, 7]);
+        ctx.arc(0, 0, this.weaponRange, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(251, 191, 36, 0.12)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.rotate(this.facingAngle);
+
+        // Kinetic Thruster Flame
+        const flameOffset = Math.sin(this.enginePulse) * 3;
+        ctx.beginPath();
+        ctx.moveTo(-this.radius * 0.8, -this.radius * 0.35);
+        ctx.lineTo(-this.radius * 1.5 + flameOffset, 0);
+        ctx.lineTo(-this.radius * 0.8, this.radius * 0.35);
+        ctx.fillStyle = "#f59e0b";
+        ctx.shadowColor = "#f59e0b";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        // Hull Body - Sleek geometric combat interceptor
+        ctx.beginPath();
+        ctx.moveTo(this.radius * 1.25, 0);
+        ctx.lineTo(-this.radius * 0.85, -this.radius * 0.9);
+        ctx.lineTo(-this.radius * 0.45, 0);
+        ctx.lineTo(-this.radius * 0.85, this.radius * 0.9);
+        ctx.closePath();
+
+        ctx.fillStyle = "#0284c7";
+        ctx.fill();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        // Cockpit Core
+        ctx.beginPath();
+        ctx.arc(this.radius * 0.15, 0, this.radius * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = "#e0f2fe";
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 4;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: Enemy
+     * =========================================================================
+     * Standard hostile entity spawned around arena perimeter.
+     * Moves directly toward the player's position using Euclidean vector math.
+     * =========================================================================
+     */
+    class Enemy {
+      /**
+       * Constructs a new Enemy instance with archetype attributes.
+       *
+       * How to call:
+       *   const chaser = new Enemy(x, y, 12, 90, 30, "#f43f5e", "chaser");
+       *   const swarmer = new Enemy(x, y, 8, 145, 16, "#ec4899", "swarmer");
+       *   const shooter = new Enemy(x, y, 14, 65, 48, "#a855f7", "shooter");
+       *   const heavy = new Enemy(x, y, 20, 52, 130, "#f97316", "heavy");
+       *
+       * @param {number} x - Horizontal coordinate.
+       * @param {number} y - Vertical coordinate.
+       * @param {number} radius - Collision radius.
+       * @param {number} speed - Tracking velocity in pixels/sec.
+       * @param {number} health - Maximum hit points.
+       * @param {string} color - Primary accent render color.
+       * @param {string} enemyType - Archetype: "chaser", "swarmer", "shooter", "heavy", or "boss".
+       */
+      constructor(x, y, radius = 12, speed = 90, health = 30, color = "#f43f5e", enemyType = "chaser") {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.speed = speed;
+        this.maxHealth = health;
+        this.health = health;
+        this.color = color;
+        this.enemyType = enemyType;
+        this.isDestroyed = false;
+        this.isBoss = false;
+        this.hasDroppedLoot = false;
+
+        // Visual rotation and hit-flash indicator
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 3;
+        this.hitFlashTimer = 0.0;
+
+        // Ranged shooter tactical combat timers
+        this.fireInterval = 2.4;
+        this.fireTimer = 0.8 + Math.random() * 1.5;
+
+        logDebug(3, "Enemy initialized", {
+          type: this.enemyType,
+          spawnX: x.toFixed(1),
+          spawnY: y.toFixed(1),
+          speed: speed.toFixed(1),
+          health
+        });
+      }
+
+      /**
+       * Advances enemy position directly toward target coordinates using unit vectors.
+       * Shooters orbit at tactical distance and periodically fire plasma bolts.
+       *
+       * How to call:
+       *   enemy.update(dt, player.x, player.y, enemyProjectiles);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {number} targetX - Player horizontal position.
+       * @param {number} targetY - Player vertical position.
+       * @param {EnemyProjectile[]} [enemyProjectiles] - Array to push fired hostile bullets into.
+       * @returns {void}
+       */
+      update(dt, targetX, targetY, enemyProjectiles) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 0) {
+          const unitX = dx / dist;
+          const unitY = dy / dist;
+
+          if (this.enemyType === "shooter") {
+            // Tactical standoff: approach if far, backpedal if too close, orbit tangentially when in sweet spot
+            const idealDist = 240;
+            if (dist > idealDist + 45) {
+              this.x += unitX * this.speed * dt;
+              this.y += unitY * this.speed * dt;
+            } else if (dist < idealDist - 45) {
+              this.x -= unitX * (this.speed * 0.75) * dt;
+              this.y -= unitY * (this.speed * 0.75) * dt;
+            } else {
+              // Lateral orbit strafe
+              this.x += -unitY * (this.speed * 0.85) * dt;
+              this.y += unitX * (this.speed * 0.85) * dt;
+            }
+
+            // Periodically fire aiming plasma bolt at player
+            this.fireTimer -= dt;
+            if (this.fireTimer <= 0 && enemyProjectiles) {
+              this.fireTimer = this.fireInterval;
+              const bSpeed = 230;
+              const bvx = unitX * bSpeed;
+              const bvy = unitY * bSpeed;
+              enemyProjectiles.push(new EnemyProjectile(this.x, this.y, bvx, bvy, 5, 12, "#c084fc"));
+              logDebug(3, "Shooter enemy discharged plasma bolt", { x: this.x.toFixed(1), y: this.y.toFixed(1) });
+            }
+          } else {
+            // Direct pursuit vector (chaser, swarmer, heavy)
+            this.x += unitX * this.speed * dt;
+            this.y += unitY * this.speed * dt;
+          }
+        }
+
+        this.rotation += this.rotationSpeed * dt;
+
+        if (this.hitFlashTimer > 0) {
+          this.hitFlashTimer -= dt;
+          if (this.hitFlashTimer < 0) this.hitFlashTimer = 0;
+        }
+      }
+
+      /**
+       * Inflicts damage onto enemy and triggers visual flash.
+       * Returns boolean indicating if damage brought enemy health to zero.
+       *
+       * How to call:
+       *   const killed = enemy.takeDamage(25);
+       *
+       * @param {number} amount - Damage sustained.
+       * @returns {boolean} True if enemy health reaches zero (killed).
+       */
+      takeDamage(amount) {
+        this.health -= amount;
+        this.hitFlashTimer = 0.1;
+
+        logDebug(3, "Enemy took damage", {
+          damageReceived: amount,
+          remainingHealth: this.health
+        });
+
+        if (this.health <= 0) {
+          logDebug(2, "Enemy neutralized", { isBoss: this.isBoss, type: this.enemyType });
+          return true;
+        }
+        return false;
+      }
+
+      /**
+       * Renders enemy geometry and overhead health bar.
+       *
+       * How to call:
+       *   enemy.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Active 2D canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        ctx.fillStyle = this.hitFlashTimer > 0 ? "#ffffff" : "#1e1b4b";
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 8;
+
+        if (this.enemyType === "swarmer") {
+          // Agile dart delta-wing geometry
+          ctx.beginPath();
+          ctx.moveTo(this.radius * 1.3, 0);
+          ctx.lineTo(-this.radius, this.radius * 0.8);
+          ctx.lineTo(-this.radius * 0.4, 0);
+          ctx.lineTo(-this.radius, -this.radius * 0.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else if (this.enemyType === "shooter") {
+          // Octagonal combat turret with central aiming optic barrel
+          const sides = 8;
+          ctx.beginPath();
+          for (let s = 0; s < sides; s++) {
+            const angle = (s * Math.PI * 2) / sides;
+            const sx = Math.cos(angle) * this.radius;
+            const sy = Math.sin(angle) * this.radius;
+            if (s === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Barrel needle
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(this.radius * 1.35, 0);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "#c084fc";
+          ctx.stroke();
+
+          // Glowing optic nucleus
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius * 0.35, 0, Math.PI * 2);
+          ctx.fillStyle = "#e9d5ff";
+          ctx.fill();
+        } else if (this.enemyType === "heavy") {
+          // Heavy armored fortress hexagon
+          const sides = 6;
+          ctx.beginPath();
+          for (let s = 0; s < sides; s++) {
+            const angle = (s * Math.PI * 2) / sides;
+            const sx = Math.cos(angle) * this.radius;
+            const sy = Math.sin(angle) * this.radius;
+            if (s === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Heavy reinforced inner plating
+          ctx.beginPath();
+          for (let s = 0; s < sides; s++) {
+            const angle = (s * Math.PI * 2) / sides;
+            const sx = Math.cos(angle) * (this.radius * 0.55);
+            const sy = Math.sin(angle) * (this.radius * 0.55);
+            if (s === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = "#fed7aa";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          // Standard diamond hostile drone geometry
+          ctx.beginPath();
+          ctx.moveTo(this.radius, 0);
+          ctx.lineTo(0, this.radius * 0.75);
+          ctx.lineTo(-this.radius, 0);
+          ctx.lineTo(0, -this.radius * 0.75);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Glowing hostile optic center
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius * 0.35, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.fill();
+        }
+
+        ctx.restore();
+
+        // Mini overhead health indicator
+        if (this.health < this.maxHealth) {
+          const barW = this.radius * 2;
+          const barH = 3;
+          const barX = this.x - barW / 2;
+          const barY = this.y - this.radius - 6;
+
+          ctx.save();
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(barX, barY, barW, barH);
+          const healthRatio = Math.max(0, this.health / this.maxHealth);
+          ctx.fillStyle = this.color;
+          ctx.fillRect(barX, barY, barW * healthRatio, barH);
+          ctx.restore();
+        }
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: BossEnemy
+     * =========================================================================
+     * Escalating elite boss encounter spawned at regular sector intervals:
+     * - Radial bullet hell ring bursts
+     * - Aimed triple-plasma spreads
+     * - Kinetic charge dash with telegraph laser warning
+     * - Below 40% health enrage mechanism
+     * =========================================================================
+     */
+    class BossEnemy extends Enemy {
+      /**
+       * Constructs an escalating Boss enemy instance.
+       *
+       * How to call:
+       *   const boss = new BossEnemy(x, y, tier, arenaWidth, arenaHeight);
+       *
+       * @param {number} x - Horizontal coordinate.
+       * @param {number} y - Vertical coordinate.
+       * @param {number} tier - Escalation tier index (1, 2, 3...).
+       * @param {number} arenaWidth - Arena width.
+       * @param {number} arenaHeight - Arena height.
+       */
+      constructor(x, y, tier = 1, arenaWidth = 800, arenaHeight = 600) {
+        const radius = 32 + Math.min(10, tier * 2);
+        const speed = 70 + tier * 8;
+        const maxHp = 500 + tier * 380;
+        super(x, y, radius, speed, maxHp, "#ec4899", "boss");
+
+        this.isBoss = true;
+        this.tier = tier;
+        this.arenaWidth = arenaWidth;
+        this.arenaHeight = arenaHeight;
+
+        const bossNames = [
+          "VANGUARD CRUSHER",
+          "PULSE OVERLORD",
+          "DREAD BEHEMOTH",
+          "APEX ANNIHILATOR",
+          "VOID COLOSSUS"
+        ];
+        this.name = bossNames[(tier - 1) % bossNames.length] + ` [TIER ${tier}]`;
+
+        // Boss attack intervals
+        this.radialBurstCooldown = Math.max(2.4, 4.0 - tier * 0.3);
+        this.radialBurstTimer = 1.0;
+
+        this.aimedBurstCooldown = Math.max(1.5, 2.8 - tier * 0.2);
+        this.aimedBurstTimer = 0.5;
+
+        // Kinetic Charge state machine: 'TRACKING' -> 'TELEGRAPH' -> 'DASHING'
+        this.chargeCooldown = Math.max(5.0, 8.0 - tier * 0.5);
+        this.chargeTimer = 3.5;
+        this.chargeState = "TRACKING";
+        this.telegraphTimer = 0;
+        this.telegraphDuration = 1.1;
+        this.dashTimer = 0;
+        this.dashDuration = 0.45;
+        this.dashUnitX = 0;
+        this.dashUnitY = 0;
+        this.dashSpeed = 390 + tier * 30;
+
+        this.isEnraged = false;
+
+        logDebug(1, "Escalating Boss entity constructed", {
+          name: this.name,
+          tier: this.tier,
+          maxHealth: this.maxHealth,
+          radius: this.radius
+        });
+      }
+
+      /**
+       * Updates boss state machine, charge phases, projectile attacks,
+       * and tracks player position.
+       *
+       * How to call:
+       *   boss.update(dt, player.x, player.y, enemyProjectilesList);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {number} targetX - Player X coordinate.
+       * @param {number} targetY - Player Y coordinate.
+       * @param {Array<EnemyProjectile>} enemyProjectiles - Projectile collection.
+       * @returns {void}
+       */
+      update(dt, targetX, targetY, enemyProjectiles) {
+        // Enrage trigger below 40% health
+        if (!this.isEnraged && this.health <= this.maxHealth * 0.4) {
+          this.isEnraged = true;
+          this.speed *= 1.35;
+          this.color = "#ef4444";
+          logDebug(1, "Boss enrage triggered! Attack speed and velocities elevated", {
+            remainingHp: this.health,
+            newSpeed: this.speed
+          });
+        }
+
+        const enrageMultiplier = this.isEnraged ? 1.4 : 1.0;
+
+        // Charge State Machine
+        if (this.chargeState === "TRACKING") {
+          const dx = targetX - this.x;
+          const dy = targetY - this.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist > 0) {
+            this.x += (dx / dist) * this.speed * dt;
+            this.y += (dy / dist) * this.speed * dt;
+          }
+
+          this.chargeTimer += dt * enrageMultiplier;
+          if (this.chargeTimer >= this.chargeCooldown) {
+            this.chargeTimer = 0;
+            this.chargeState = "TELEGRAPH";
+            this.telegraphTimer = 0;
+
+            const cDx = targetX - this.x;
+            const cDy = targetY - this.y;
+            const cDist = Math.hypot(cDx, cDy);
+            this.dashUnitX = cDist > 0 ? cDx / cDist : 1;
+            this.dashUnitY = cDist > 0 ? cDy / cDist : 0;
+
+            logDebug(2, "Boss begins kinetic charge telegraph", { targetX, targetY });
+          }
+        } else if (this.chargeState === "TELEGRAPH") {
+          this.telegraphTimer += dt;
+          if (this.telegraphTimer >= this.telegraphDuration) {
+            this.chargeState = "DASHING";
+            this.dashTimer = 0;
+            logDebug(2, "Boss executes kinetic dash");
+          }
+        } else if (this.chargeState === "DASHING") {
+          this.x += this.dashUnitX * this.dashSpeed * dt;
+          this.y += this.dashUnitY * this.dashSpeed * dt;
+          this.dashTimer += dt;
+
+          if (this.dashTimer >= this.dashDuration) {
+            this.chargeState = "TRACKING";
+            logDebug(2, "Boss kinetic dash completed");
+          }
+        }
+
+        // Arena boundary containment
+        this.x = Math.max(this.radius, Math.min(this.arenaWidth - this.radius, this.x));
+        this.y = Math.max(this.radius, Math.min(this.arenaHeight - this.radius, this.y));
+
+        // Radial Bullet Hell attack cycle
+        this.radialBurstTimer += dt * enrageMultiplier;
+        if (this.radialBurstTimer >= this.radialBurstCooldown) {
+          this.radialBurstTimer = 0;
+          this.fireRadialBurst(enemyProjectiles);
+        }
+
+        // Aimed plasma spread attack cycle
+        this.aimedBurstTimer += dt * enrageMultiplier;
+        if (this.aimedBurstTimer >= this.aimedBurstCooldown) {
+          this.aimedBurstTimer = 0;
+          this.fireAimedCluster(targetX, targetY, enemyProjectiles);
+        }
+
+        this.rotation += (this.isEnraged ? 2.5 : 1.2) * dt;
+
+        if (this.hitFlashTimer > 0) {
+          this.hitFlashTimer -= dt;
+          if (this.hitFlashTimer < 0) this.hitFlashTimer = 0;
+        }
+      }
+
+      /**
+       * Dispatches a radial ring of hazardous projectiles across 360 degrees.
+       *
+       * How to call:
+       *   boss.fireRadialBurst(enemyProjectiles);
+       *
+       * @param {Array<EnemyProjectile>} enemyProjectiles - Array to populate.
+       * @returns {void}
+       */
+      fireRadialBurst(enemyProjectiles) {
+        const bulletCount = 10 + Math.min(8, this.tier * 2);
+        const bulletSpeed = 160 + this.tier * 15;
+        const angleStep = (Math.PI * 2) / bulletCount;
+        const offset = Math.random() * Math.PI;
+
+        for (let i = 0; i < bulletCount; i++) {
+          const angle = i * angleStep + offset;
+          const vx = Math.cos(angle) * bulletSpeed;
+          const vy = Math.sin(angle) * bulletSpeed;
+          const bullet = new EnemyProjectile(this.x, this.y, vx, vy, 5, 12, "#ec4899");
+          enemyProjectiles.push(bullet);
+        }
+
+        logDebug(2, "Boss emitted radial burst", { bulletCount });
+      }
+
+      /**
+       * Dispatches a 3-way spread of aimed plasma bolts toward the player.
+       *
+       * How to call:
+       *   boss.fireAimedCluster(playerX, playerY, enemyProjectiles);
+       *
+       * @param {number} targetX - Player X coordinate.
+       * @param {number} targetY - Player Y coordinate.
+       * @param {Array<EnemyProjectile>} enemyProjectiles - Array to populate.
+       * @returns {void}
+       */
+      fireAimedCluster(targetX, targetY, enemyProjectiles) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const baseAngle = Math.atan2(dy, dx);
+        const spreadAngles = [-0.22, 0, 0.22];
+        const bulletSpeed = 220 + this.tier * 20;
+
+        for (let i = 0; i < spreadAngles.length; i++) {
+          const angle = baseAngle + spreadAngles[i];
+          const vx = Math.cos(angle) * bulletSpeed;
+          const vy = Math.sin(angle) * bulletSpeed;
+          const bullet = new EnemyProjectile(this.x, this.y, vx, vy, 5.5, 15, "#f43f5e");
+          enemyProjectiles.push(bullet);
+        }
+
+        logDebug(3, "Boss dispatched aimed plasma cluster");
+      }
+
+      /**
+       * Renders boss entity, telegraph laser, and overhead health bar.
+       *
+       * How to call:
+       *   boss.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Active 2D canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        // Telegraph warning laser
+        if (this.chargeState === "TELEGRAPH") {
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([8, 6]);
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x + this.dashUnitX * 700, this.y + this.dashUnitY * 700);
+          ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
+          ctx.lineWidth = 3;
+          ctx.shadowColor = "#ef4444";
+          ctx.shadowBlur = 10;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Outer ambient aura
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = this.isEnraged ? "rgba(239, 68, 68, 0.7)" : "rgba(236, 72, 153, 0.4)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.rotate(this.rotation);
+
+        // Faceted octagonal boss fortress shell
+        const points = 8;
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+          const a = (i * Math.PI * 2) / points;
+          const r = i % 2 === 0 ? this.radius : this.radius * 0.82;
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = this.hitFlashTimer > 0 ? "#ffffff" : "#1e1022";
+        ctx.fill();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 14;
+        ctx.stroke();
+
+        // Inner glowing core
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.42, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        ctx.restore();
+
+        // Overhead health bar
+        const barW = this.radius * 2.2;
+        const barH = 5;
+        const barX = this.x - barW / 2;
+        const barY = this.y - this.radius - 14;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillRect(barX, barY, barW, barH);
+        const healthRatio = Math.max(0, this.health / this.maxHealth);
+        ctx.fillStyle = this.isEnraged ? "#ef4444" : "#ec4899";
+        ctx.fillRect(barX, barY, barW * healthRatio, barH);
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: Projectile
+     * =========================================================================
+     * Represents a projectile dispatched by the player's weapon systems.
+     * Supports speed, damage, critical hits, and piercing through hostiles.
+     * =========================================================================
+     */
+    class Projectile {
+      /**
+       * Constructs a new Projectile instance.
+       *
+       * How to call:
+       *   const proj = new Projectile(x, y, vx, vy, 4.5, 32, 0, "#fbbf24", false, 1, false, 45, 0);
+       *
+       * @param {number} x - Origin horizontal coordinate.
+       * @param {number} y - Origin vertical coordinate.
+       * @param {number} vx - Horizontal velocity in pixels/sec.
+       * @param {number} vy - Vertical velocity in pixels/sec.
+       * @param {number} radius - Collision radius.
+       * @param {number} damage - Damage applied on impact.
+       * @param {number} pierceRemaining - Number of additional pierce hits.
+       * @param {string} color - Render color.
+       * @param {boolean} isCrit - Whether this is a critical strike.
+       * @param {number} chainRemaining - Remaining chained hit lightning arcs.
+       * @param {boolean} hasExplosion - Whether detonation creates an AoE blast.
+       * @param {number} blastRadius - AoE detonation blast radius.
+       * @param {number} ricochetRemaining - Remaining boundary ricochet bounces.
+       * @param {number} maxRange - Maximum flight distance before projectile expires.
+       */
+      constructor(
+        x,
+        y,
+        vx,
+        vy,
+        radius = 4.5,
+        damage = 32,
+        pierceRemaining = 0,
+        color = "#fbbf24",
+        isCrit = false,
+        chainRemaining = 0,
+        hasExplosion = false,
+        blastRadius = 45,
+        ricochetRemaining = 0,
+        maxRange = 260
+      ) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = isCrit ? radius * 1.3 : radius;
+        this.damage = damage;
+        this.pierceRemaining = pierceRemaining;
+        this.color = isCrit ? "#f59e0b" : color;
+        this.isCrit = isCrit;
+        this.chainRemaining = chainRemaining;
+        this.hasExplosion = hasExplosion;
+        this.blastRadius = blastRadius;
+        this.ricochetRemaining = ricochetRemaining;
+        this.maxRange = maxRange;
+        this.distanceTraveled = 0;
+        this.isDestroyed = false;
+        this.hitEntities = new Set();
+
+        // Fragmentation and Balatro Joker augmentation properties
+        this.isFragment = false; // Whether this projectile is a kinetic shrapnel shard
+        this.hasSnailMail = false; // Snail Mail acceleration mechanic
+        this.snailAcc = 480; // Acceleration in pixels/sec^2
+        this.snailMaxSpeed = 1400; // Terminal accelerated speed
+        this.superpositionPairId = null; // ID of quantum entangled twin pair
+        this.twin = null; // Pointer to entangled twin projectile
+        this.superpositionResolved = false; // Whether the quantum measurement has already collapsed
+      }
+
+      /**
+       * Advances projectile coordinates by velocity vector scaled by dt, tracks distance traveled,
+       * checks boundary ricochet reflections, and expires when max weapon range is reached.
+       *
+       * How to call:
+       *   proj.update(dt, 800, 600);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @param {number} arenaWidth - Logical width of arena.
+       * @param {number} arenaHeight - Logical height of arena.
+       * @returns {void}
+       */
+      update(dt, arenaWidth = 800, arenaHeight = 600) {
+        // Snail Mail acceleration mechanics: starts slow, accelerates over time
+        if (this.hasSnailMail) {
+          const currentSpeed = Math.hypot(this.vx, this.vy);
+          if (currentSpeed > 0 && currentSpeed < this.snailMaxSpeed) {
+            const nextSpeed = Math.min(this.snailMaxSpeed, currentSpeed + this.snailAcc * dt);
+            this.vx = (this.vx / currentSpeed) * nextSpeed;
+            this.vy = (this.vy / currentSpeed) * nextSpeed;
+          }
+        }
+
+        const stepX = this.vx * dt;
+        const stepY = this.vy * dt;
+        this.x += stepX;
+        this.y += stepY;
+        this.distanceTraveled += Math.hypot(stepX, stepY);
+
+        // Terminate projectile flight once maximum weapon range threshold is crossed
+        if (this.distanceTraveled >= this.maxRange) {
+          this.isDestroyed = true;
+          logDebug(4, "Projectile expired upon reaching maximum range", {
+            distanceTraveled: this.distanceTraveled.toFixed(1),
+            maxRange: this.maxRange
+          });
+          return;
+        }
+
+        // Execute kinetic ricochet bounce if projectile carries ricochet charges
+        if (this.ricochetRemaining > 0) {
+          let bounced = false;
+          if (this.x <= this.radius && this.vx < 0) {
+            this.x = this.radius;
+            this.vx = -this.vx;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off left boundary", { remaining: this.ricochetRemaining });
+          } else if (this.x >= arenaWidth - this.radius && this.vx > 0) {
+            this.x = arenaWidth - this.radius;
+            this.vx = -this.vx;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off right boundary", { remaining: this.ricochetRemaining });
+          }
+
+          if (this.y <= this.radius && this.vy < 0) {
+            this.y = this.radius;
+            this.vy = -this.vy;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off top boundary", { remaining: this.ricochetRemaining });
+          } else if (this.y >= arenaHeight - this.radius && this.vy > 0) {
+            this.y = arenaHeight - this.radius;
+            this.vy = -this.vy;
+            this.ricochetRemaining -= 1;
+            bounced = true;
+            logDebug(3, "Projectile ricochet off bottom boundary", { remaining: this.ricochetRemaining });
+          }
+
+          if (bounced) {
+            // Grant auxiliary flight distance on successful perimeter ricochet
+            this.maxRange += 120;
+          }
+        }
+      }
+
+      /**
+       * Tests if projectile has traversed beyond arena margin limits.
+       *
+       * How to call:
+       *   if (proj.isOutOfBounds(800, 600)) { ... }
+       *
+       * @param {number} arenaWidth - Logical width.
+       * @param {number} arenaHeight - Logical height.
+       * @returns {boolean} True if outside bounds.
+       */
+      isOutOfBounds(arenaWidth, arenaHeight) {
+        const margin = 35;
+        return (
+          this.x < -margin ||
+          this.x > arenaWidth + margin ||
+          this.y < -margin ||
+          this.y > arenaHeight + margin
+        );
+      }
+
+      /**
+       * Renders projectile core, incandescent head, and distance-based dissipation.
+       *
+       * How to call:
+       *   proj.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+
+        // Smooth dissipation when projectile approaches its terminal range limit
+        const rangeRatio = this.distanceTraveled / this.maxRange;
+        if (rangeRatio > 0.8) {
+          ctx.globalAlpha = Math.max(0.1, 1 - (rangeRatio - 0.8) / 0.2);
+        }
+
+        // Snail Mail fiery propulsion trail
+        if (this.hasSnailMail) {
+          const spd = Math.hypot(this.vx, this.vy);
+          const exhaustLen = Math.min(22, (spd / 500) * 14);
+          const angle = Math.atan2(this.vy, this.vx);
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x - Math.cos(angle) * exhaustLen, this.y - Math.sin(angle) * exhaustLen);
+          ctx.strokeStyle = "#f97316";
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+
+        // Superposition quantum phase ring
+        if (this.superpositionPairId) {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+
+        // Core projectile body
+        ctx.beginPath();
+        if (this.isFragment) {
+          // Sharp diamond shard silhouette for fragmentation shrapnel
+          ctx.moveTo(this.x, this.y - this.radius);
+          ctx.lineTo(this.x + this.radius, this.y);
+          ctx.lineTo(this.x, this.y + this.radius);
+          ctx.lineTo(this.x - this.radius, this.y);
+          ctx.closePath();
+        } else {
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = this.isCrit ? 12 : 6;
+        ctx.fill();
+
+        // Inner incandescent core
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: EnemyProjectile
+     * =========================================================================
+     * Hazardous projectile fired by Boss entities that travels across the arena
+     * and damages the player vessel on collision.
+     * =========================================================================
+     */
+    class EnemyProjectile {
+      /**
+       * Constructs a new EnemyProjectile instance.
+       *
+       * How to call:
+       *   const eBullet = new EnemyProjectile(x, y, vx, vy, 5, 12, "#ec4899");
+       *
+       * @param {number} x - Origin X.
+       * @param {number} y - Origin Y.
+       * @param {number} vx - Horizontal velocity.
+       * @param {number} vy - Vertical velocity.
+       * @param {number} radius - Collision radius.
+       * @param {number} damage - Damage applied on hit.
+       * @param {string} color - Render color.
+       */
+      constructor(x, y, vx, vy, radius = 5, damage = 12, color = "#ec4899") {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = radius;
+        this.damage = damage;
+        this.color = color;
+        this.isDestroyed = false;
+      }
+
+      /**
+       * Advances enemy projectile by its velocity.
+       *
+       * How to call:
+       *   eBullet.update(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+      }
+
+      /**
+       * Tests if bullet has exited arena bounds.
+       *
+       * How to call:
+       *   if (eBullet.isOutOfBounds(800, 600)) { ... }
+       *
+       * @param {number} arenaWidth - Logical width.
+       * @param {number} arenaHeight - Logical height.
+       * @returns {boolean} True if outside bounds.
+       */
+      isOutOfBounds(arenaWidth, arenaHeight) {
+        const margin = 30;
+        return (
+          this.x < -margin ||
+          this.x > arenaWidth + margin ||
+          this.y < -margin ||
+          this.y > arenaHeight + margin
+        );
+      }
+
+      /**
+       * Renders the hazardous plasma bolt.
+       *
+       * How to call:
+       *   eBullet.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: LightningArc
+     * =========================================================================
+     * Renders a vivid electric arc between two coordinate points to visually
+     * represent the Chained Hits upgrade in combat.
+     * =========================================================================
+     */
+    class LightningArc {
+      /**
+       * Constructs a new LightningArc visual entity.
+       *
+       * How to call:
+       *   const arc = new LightningArc(x1, y1, x2, y2, "#38bdf8", 0.22);
+       *
+       * @param {number} x1 - Source horizontal coordinate.
+       * @param {number} y1 - Source vertical coordinate.
+       * @param {number} x2 - Target horizontal coordinate.
+       * @param {number} y2 - Target vertical coordinate.
+       * @param {string} color - Hex or rgba stroke color.
+       * @param {number} duration - Lifespan in seconds.
+       */
+      constructor(x1, y1, x2, y2, color = "#38bdf8", duration = 0.22) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.color = color;
+        this.duration = duration;
+        this.elapsed = 0.0;
+        this.isDestroyed = false;
+
+        // Generate jagged intermediate lightning vertices
+        const segments = 5;
+        this.points = [{ x: x1, y: y1 }];
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const normalX = -dy;
+        const normalY = dx;
+        const normalLen = Math.hypot(normalX, normalY) || 1;
+
+        for (let i = 1; i < segments; i++) {
+          const t = i / segments;
+          const jitter = (Math.random() - 0.5) * 22;
+          this.points.push({
+            x: x1 + dx * t + (normalX / normalLen) * jitter,
+            y: y1 + dy * t + (normalY / normalLen) * jitter
+          });
+        }
+        this.points.push({ x: x2, y: y2 });
+
+        logDebug(3, "LightningArc visual spawned", { x1, y1, x2, y2, segments });
+      }
+
+      /**
+       * Advances the lightning arc timer and marks destroyed when expired.
+       *
+       * How to call:
+       *   arc.update(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      update(dt) {
+        this.elapsed += dt;
+        if (this.elapsed >= this.duration) {
+          this.isDestroyed = true;
+        }
+      }
+
+      /**
+       * Renders the electric lightning stroke onto the 2D canvas context.
+       *
+       * How to call:
+       *   arc.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas rendering context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        const alpha = Math.max(0, 1 - this.elapsed / this.duration);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(this.points[0].x, this.points[0].y);
+        for (let i = 1; i < this.points.length; i++) {
+          ctx.lineTo(this.points[i].x, this.points[i].y);
+        }
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: BlastEffect
+     * =========================================================================
+     * Expanding shockwave ring indicating an area-of-effect detonation.
+     * =========================================================================
+     */
+    class BlastEffect {
+      /**
+       * Constructs a new BlastEffect visual entity.
+       *
+       * How to call:
+       *   const blast = new BlastEffect(x, y, 45, "#f59e0b", 0.28);
+       *
+       * @param {number} x - Origin horizontal coordinate.
+       * @param {number} y - Origin vertical coordinate.
+       * @param {number} maxRadius - Maximum expansion radius in pixels.
+       * @param {string} color - Accent stroke color.
+       * @param {number} duration - Lifespan in seconds.
+       */
+      constructor(x, y, maxRadius = 45, color = "#f59e0b", duration = 0.28) {
+        this.x = x;
+        this.y = y;
+        this.maxRadius = maxRadius;
+        this.color = color;
+        this.duration = duration;
+        this.elapsed = 0.0;
+        this.isDestroyed = false;
+
+        logDebug(3, "BlastEffect spawned", { x, y, maxRadius });
+      }
+
+      /**
+       * Advances blast effect expansion.
+       *
+       * How to call:
+       *   blast.update(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      update(dt) {
+        this.elapsed += dt;
+        if (this.elapsed >= this.duration) {
+          this.isDestroyed = true;
+        }
+      }
+
+      /**
+       * Renders expanding shockwave ring.
+       *
+       * How to call:
+       *   blast.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas rendering context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        const progress = Math.min(1, this.elapsed / this.duration);
+        const radius = progress * this.maxRadius;
+        const alpha = Math.max(0, 1 - progress);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2.5 * (1 - progress * 0.6);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: DroppedItem
+     * =========================================================================
+     * Represents collectible dropped XP items and high-value Boss Caches.
+     * Implements magnetic attraction toward player when within magnet radius.
+     * =========================================================================
+     */
+    class DroppedItem {
+      /**
+       * Constructs a new DroppedItem (standard XP square, Boss Cache, or decaying Luck Token).
+       *
+       * How to call:
+       *   const item = new DroppedItem(x, y, 12, 10, false, "#34d399");
+       *   const luckCrystal = new DroppedItem(x, y, 16, 60, false, "#facc15", true, 60, 12.0);
+       *
+       * @param {number} x - Horizontal position.
+       * @param {number} y - Vertical position.
+       * @param {number} size - Visual dimension.
+       * @param {number} value - Experience value provided.
+       * @param {boolean} isBossCache - Whether this is an elite boss drop.
+       * @param {string} color - Accent display color.
+       * @param {boolean} isLuckToken - Whether this is a high-value decaying luck crystal.
+       * @param {number} initialLuckValue - Starting XP value before decay begins.
+       * @param {number} luckDuration - Total seconds before value ticks down to 0.
+       */
+      constructor(
+        x,
+        y,
+        size = 12,
+        value = 10,
+        isBossCache = false,
+        color = "#34d399",
+        isLuckToken = false,
+        initialLuckValue = 60,
+        luckDuration = 12.0
+      ) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
+        this.value = value;
+        this.isBossCache = isBossCache;
+        this.color = color;
+        this.isLuckToken = isLuckToken;
+        this.initialLuckValue = initialLuckValue;
+        this.luckDuration = luckDuration;
+        this.luckTimer = luckDuration;
+        this.isDestroyed = false;
+
+        this.rotation = Math.random() * Math.PI;
+        this.bobOffset = Math.random() * Math.PI * 2;
+
+        logDebug(3, "Dropped item created", {
+          x: x.toFixed(1),
+          y: y.toFixed(1),
+          value: this.value,
+          isBossCache: this.isBossCache,
+          isLuckToken: this.isLuckToken
+        });
+      }
+
+      /**
+       * Updates item rotation, decays luck token value over time,
+       * and pulls it toward the player if inside magnet radius.
+       *
+       * How to call:
+       *   item.update(dt, player.x, player.y, player.magnetRadius);
+       *
+       * @param {number} dt - Frame delta time.
+       * @param {number} playerX - Player X.
+       * @param {number} playerY - Player Y.
+       * @param {number} magnetRadius - Player suction radius.
+       * @returns {void}
+       */
+      update(dt, playerX, playerY, magnetRadius) {
+        this.rotation += (this.isLuckToken ? 3.6 : this.isBossCache ? 3.0 : 1.8) * dt;
+        this.bobOffset += dt * 3.5;
+
+        // Decaying Luck Token mechanics: starts high and ticks down toward zero
+        if (this.isLuckToken) {
+          this.luckTimer -= dt;
+          if (this.luckTimer <= 0) {
+            this.luckTimer = 0;
+            this.value = 0;
+            this.isDestroyed = true;
+            logDebug(3, "Decaying luck token fully depleted and expired");
+            return;
+          }
+          const progress = Math.max(0, this.luckTimer / this.luckDuration);
+          this.value = Math.max(1, Math.ceil(this.initialLuckValue * progress));
+        }
+
+        const dx = playerX - this.x;
+        const dy = playerY - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        // Magnetic suction pull logic
+        if (dist < magnetRadius && dist > 0) {
+          const pullSpeed = (this.isLuckToken ? 400 : 340) * (1 - dist / magnetRadius) + 140;
+          this.x += (dx / dist) * pullSpeed * dt;
+          this.y += (dy / dist) * pullSpeed * dt;
+        }
+      }
+
+      /**
+       * Renders the glowing XP square, Boss Cache, or decaying Luck Crystal on canvas.
+       * Decaying luck tokens dynamically morph color from yellow -> green -> grey -> black
+       * to visually indicate XP depletion without printing textual numbers.
+       *
+       * How to call:
+       *   item.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y + Math.sin(this.bobOffset) * 2.5);
+        ctx.rotate(this.rotation);
+
+        const half = this.size / 2;
+
+        if (this.isLuckToken) {
+          // Decaying Luck Crystal: Clean square geometry matching regular drops,
+          // with color state showing remaining value: yellow -> green -> grey -> black.
+          // Strictly no numbers printed on the token face.
+          const lifeFraction = Math.max(0, this.luckTimer / this.luckDuration);
+          let strokeColor = "#facc15";
+          let fillColor = "#422006";
+          let coreColor = "#fef08a";
+          let shadowColor = "#eab308";
+          let shadowBlur = 12;
+
+          if (lifeFraction > 0.60) {
+            // Yellow phase: High bonus XP
+            strokeColor = "#facc15";
+            fillColor = "#422006";
+            coreColor = "#fef08a";
+            shadowColor = "#eab308";
+            shadowBlur = 12;
+          } else if (lifeFraction > 0.25) {
+            // Green phase: Moderate bonus XP
+            strokeColor = "#22c55e";
+            fillColor = "#064e3b";
+            coreColor = "#86efac";
+            shadowColor = "#16a34a";
+            shadowBlur = 9;
+          } else if (lifeFraction > 0.08) {
+            // Grey phase: Depleted bonus XP
+            strokeColor = "#64748b";
+            fillColor = "#1e293b";
+            coreColor = "#94a3b8";
+            shadowColor = "#475569";
+            shadowBlur = 5;
+          } else {
+            // Black / Charcoal phase: About to expire
+            strokeColor = "#27272a";
+            fillColor = "#09090b";
+            coreColor = "#3f3f46";
+            shadowColor = "rgba(0, 0, 0, 0.6)";
+            shadowBlur = 2;
+          }
+
+          // Outer resonant border
+          ctx.beginPath();
+          ctx.rect(-half, -half, this.size, this.size);
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 2.0;
+          ctx.shadowColor = shadowColor;
+          ctx.shadowBlur = shadowBlur;
+          ctx.stroke();
+
+          // Inner luminescent nucleus
+          ctx.beginPath();
+          ctx.rect(-half * 0.45, -half * 0.45, this.size * 0.45, this.size * 0.45);
+          ctx.fillStyle = coreColor;
+          ctx.shadowBlur = 0;
+          ctx.fill();
+        } else {
+          // Regular XP square or Boss Cache
+          ctx.beginPath();
+          ctx.rect(-half, -half, this.size, this.size);
+          ctx.fillStyle = this.isBossCache ? "#78350f" : "#064e3b";
+          ctx.fill();
+          ctx.strokeStyle = this.color;
+          ctx.lineWidth = this.isBossCache ? 2.5 : 1.75;
+          ctx.shadowColor = this.color;
+          ctx.shadowBlur = this.isBossCache ? 12 : 8;
+          ctx.stroke();
+
+          // Inner glowing nucleus
+          ctx.beginPath();
+          ctx.rect(-half * 0.45, -half * 0.45, this.size * 0.45, this.size * 0.45);
+          ctx.fillStyle = this.isBossCache ? "#fef08a" : "#a7f3d0";
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: FloatingText
+     * =========================================================================
+     * Temporary floating combat text displaying XP gains and damage metrics.
+     * =========================================================================
+     */
+    class FloatingText {
+      /**
+       * Constructs a new FloatingText instance.
+       *
+       * How to call:
+       *   const text = new FloatingText(x, y, "+1 XP", "#34d399", 0.9);
+       *
+       * @param {number} x - Horizontal coordinate.
+       * @param {number} y - Vertical coordinate.
+       * @param {string} text - Message to render.
+       * @param {string} color - Display text color.
+       * @param {number} duration - Lifetime in seconds.
+       */
+      constructor(x, y, text, color = "#ffffff", duration = 0.8) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.duration = duration;
+        this.life = duration;
+        this.vy = -35;
+        this.isDestroyed = false;
+      }
+
+      /**
+       * Advances vertical drift and decays opacity over time.
+       *
+       * How to call:
+       *   text.update(dt);
+       *
+       * @param {number} dt - Frame delta time.
+       * @returns {void}
+       */
+      update(dt) {
+        this.y += this.vy * dt;
+        this.life -= dt;
+        if (this.life <= 0) {
+          this.isDestroyed = true;
+        }
+      }
+
+      /**
+       * Renders fading text onto the canvas context.
+       *
+       * How to call:
+       *   text.draw(ctx);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @returns {void}
+       */
+      draw(ctx) {
+        const alpha = Math.max(0, this.life / this.duration);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = this.color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: UpgradeManager
+     * =========================================================================
+     * Brotato-style upgrade system: Generates randomized 3-card offerings upon
+     * Level Up, handles pointer hit-testing and keyboard shortcuts [1], [2], [3],
+     * and mutates the player vessel stats.
+     * =========================================================================
+     */
+
+    /* ===== src/js/03-upgrades.js ===== */
+class UpgradeManager {
+      /**
+       * Constructs the UpgradeManager catalog of player augmentations.
+       *
+       * How to call:
+       *   const upgradeMgr = new UpgradeManager();
+       */
+      constructor() {
+        this.upgradeCatalog = [
+          {
+            id: "chain_hits",
+            title: "CHAIN LIGHTNING",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Projectiles discharge electric arcs chaining to +1 nearby hostile",
+            apply: (player) => {
+              player.chainHits += 1;
+              logDebug(1, "Upgrade applied: CHAIN LIGHTNING", { chainHits: player.chainHits });
+            }
+          },
+          {
+            id: "multishot",
+            title: "SPREAD VOLLEY",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Adds +1 additional projectile per firing cycle in spread",
+            apply: (player) => {
+              player.multishotCount += 1;
+              logDebug(1, "Upgrade applied: SPREAD VOLLEY", { multishot: player.multishotCount });
+            }
+          },
+          {
+            id: "overclock_speed",
+            title: "AGILITY THRUSTERS",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Increases vessel flight velocity by +25 px/sec",
+            apply: (player) => {
+              player.speed += 25;
+              logDebug(1, "Upgrade applied: AGILITY THRUSTERS", { speed: player.speed });
+            }
+          },
+          {
+            id: "ricochet",
+            title: "KINETIC RICOCHET",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Projectiles bounce off screen arena perimeter walls +1 time",
+            apply: (player) => {
+              player.ricochetCount += 1;
+              logDebug(1, "Upgrade applied: KINETIC RICOCHET", { ricochet: player.ricochetCount });
+            }
+          },
+          {
+            id: "explosive_rounds",
+            title: "PLASMA WARHEAD",
+            tierName: "EPIC",
+            rarityColor: "#f59e0b",
+            description: "Projectiles detonate on impact with a 45px area shockwave blast",
+            apply: (player) => {
+              player.hasExplosiveBlast = true;
+              player.blastRadius = Math.min(85, player.blastRadius + 15);
+              logDebug(1, "Upgrade applied: PLASMA WARHEAD", { blastRadius: player.blastRadius });
+            }
+          },
+          {
+            id: "nanite_siphon",
+            title: "NANITE SIPHON",
+            tierName: "UNCOMMON",
+            rarityColor: "#34d399",
+            description: "15% chance on enemy defeat to restore +8 hull integrity",
+            apply: (player) => {
+              player.lifeLeechChance = Math.min(0.5, player.lifeLeechChance + 0.15);
+              logDebug(1, "Upgrade applied: NANITE SIPHON", { leechChance: player.lifeLeechChance });
+            }
+          },
+          {
+            id: "attack_speed",
+            title: "RAPID CYCLER",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Reduces auto-combat cooldown interval by 18%",
+            apply: (player) => {
+              player.fireInterval = Math.max(0.14, player.fireInterval * 0.82);
+              logDebug(1, "Upgrade applied: RAPID CYCLER", { newInterval: player.fireInterval });
+            }
+          },
+          {
+            id: "heavy_ordnance",
+            title: "HEAVY ORDNANCE",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Increases projectile kinetic damage by +12",
+            apply: (player) => {
+              player.damage += 12;
+              logDebug(1, "Upgrade applied: HEAVY ORDNANCE", { newDamage: player.damage });
+            }
+          },
+          {
+            id: "piercing_rounds",
+            title: "RAILGUN CASING",
+            tierName: "UNCOMMON",
+            rarityColor: "#34d399",
+            description: "Projectiles pierce through +1 additional hostile",
+            apply: (player) => {
+              player.pierceCount += 1;
+              logDebug(1, "Upgrade applied: RAILGUN CASING", { pierce: player.pierceCount });
+            }
+          },
+          {
+            id: "vital_bulk",
+            title: "TITANIUM PLATING",
+            tierName: "UNCOMMON",
+            rarityColor: "#34d399",
+            description: "+30 Max Hull HP and instantly restores 40 HP",
+            apply: (player) => {
+              player.maxHealth += 30;
+              player.heal(40);
+              logDebug(1, "Upgrade applied: TITANIUM PLATING", { maxHp: player.maxHealth, hp: player.health });
+            }
+          },
+          {
+            id: "energy_shield",
+            title: "REACTIVE ARMOR",
+            tierName: "UNCOMMON",
+            rarityColor: "#34d399",
+            description: "Adds +3 flat damage mitigation to all hits",
+            apply: (player) => {
+              player.armor += 3;
+              logDebug(1, "Upgrade applied: REACTIVE ARMOR", { armor: player.armor });
+            }
+          },
+          {
+            id: "vacuum_funnel",
+            title: "MAGNETIC VORTEX",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Increases XP suction radius by +70 pixels",
+            apply: (player) => {
+              player.magnetRadius += 70;
+              logDebug(1, "Upgrade applied: MAGNETIC VORTEX", { magnetRadius: player.magnetRadius });
+            }
+          },
+          {
+            id: "crit_overcharge",
+            title: "OPTICAL AMPLIFIER",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Adds +15% Critical Chance dealing 2.5x damage",
+            apply: (player) => {
+              player.critChance += 0.15;
+              player.critMultiplier = 2.5;
+              logDebug(1, "Upgrade applied: OPTICAL AMPLIFIER", { critChance: player.critChance });
+            }
+          },
+          {
+            id: "targeting_sensor",
+            title: "TARGETING SENSOR",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Extends weapon targeting range with diminishing returns (+22% base range scaling toward soft cap)",
+            apply: (player) => {
+              const headroom = Math.max(0, (RANGE_SOFT_CAP - player.weaponRange) / (RANGE_SOFT_CAP - BASE_WEAPON_RANGE));
+              const bonus = Math.max(14, Math.round(BASE_WEAPON_RANGE * 0.22 * headroom));
+              player.weaponRange = Math.min(RANGE_SOFT_CAP, player.weaponRange + bonus);
+              logDebug(1, "Upgrade applied: TARGETING SENSOR", { weaponRange: player.weaponRange, bonus });
+            }
+          },
+          {
+            id: "focal_array",
+            title: "FOCAL ARRAY",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Increases kinetic damage by +6 and extends targeting range (+30% base range scaling toward soft cap)",
+            apply: (player) => {
+              const headroom = Math.max(0, (RANGE_SOFT_CAP - player.weaponRange) / (RANGE_SOFT_CAP - BASE_WEAPON_RANGE));
+              const bonus = Math.max(18, Math.round(BASE_WEAPON_RANGE * 0.30 * headroom));
+              player.weaponRange = Math.min(RANGE_SOFT_CAP, player.weaponRange + bonus);
+              player.damage += 6;
+              logDebug(1, "Upgrade applied: FOCAL ARRAY", { weaponRange: player.weaponRange, damage: player.damage, bonus });
+            }
+          },
+          {
+            id: "accelerator_coils",
+            title: "ACCELERATOR COILS",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Increases projectile flight speed by +20% (faster impacts hit harder)",
+            apply: (player) => {
+              player.projectileSpeed = Math.round(player.projectileSpeed * 1.20);
+              logDebug(1, "Upgrade applied: ACCELERATOR COILS", { projectileSpeed: player.projectileSpeed });
+            }
+          },
+          {
+            id: "hypervelocity_cores",
+            title: "HYPERVELOCITY CORES",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Increases projectile speed by +35% and extends targeting range (+18% base range scaling toward soft cap)",
+            apply: (player) => {
+              player.projectileSpeed = Math.round(player.projectileSpeed * 1.35);
+              const headroom = Math.max(0, (RANGE_SOFT_CAP - player.weaponRange) / (RANGE_SOFT_CAP - BASE_WEAPON_RANGE));
+              const bonus = Math.max(12, Math.round(BASE_WEAPON_RANGE * 0.18 * headroom));
+              player.weaponRange = Math.min(RANGE_SOFT_CAP, player.weaponRange + bonus);
+              logDebug(1, "Upgrade applied: HYPERVELOCITY CORES", { projectileSpeed: player.projectileSpeed, weaponRange: player.weaponRange });
+            }
+          },
+          {
+            id: "lucky_charm",
+            title: "LUCKY CHARM",
+            tierName: "UNCOMMON",
+            rarityColor: "#34d399",
+            description: "A mysterious talisman imbued with fortuitous energy. Permanently increases Luck (+1).",
+            apply: (player) => {
+              player.luck += 1;
+              logDebug(1, "Upgrade applied: LUCKY CHARM", { luck: player.luck });
+            }
+          },
+          {
+            id: "shrapnel_casing",
+            title: "SHRAPNEL CASING",
+            tierName: "COMMON",
+            rarityColor: "#38bdf8",
+            description: "Projectiles shatter into +2 fragmentation shards on final impact; shard spread and pierce chance scale with impact speed",
+            apply: (player) => {
+              player.fragmentation += 2;
+              logDebug(1, "Upgrade applied: SHRAPNEL CASING", { fragmentation: player.fragmentation });
+            }
+          },
+          {
+            id: "cluster_munitions",
+            title: "CLUSTER MUNITIONS",
+            tierName: "RARE",
+            rarityColor: "#a855f7",
+            description: "Projectiles shatter into +3 shards with +15% increased shard velocity and pierce chance",
+            apply: (player) => {
+              player.fragmentation += 3;
+              player.projectileSpeed = Math.round(player.projectileSpeed * 1.15);
+              logDebug(1, "Upgrade applied: CLUSTER MUNITIONS", { fragmentation: player.fragmentation, projectileSpeed: player.projectileSpeed });
+            }
+          }
+        ];
+
+        // Balatro Joker catalog: 1 in 200 chance to appear, out of place by design
+        this.jokerCatalog = [
+          {
+            id: "joker_snail_mail",
+            isJoker: true,
+            title: "Snail Mail",
+            tierName: "JOKER",
+            rarityTier: "UNCOMMON",
+            rarityColor: "#ef4444",
+            imageSrc: "/joker_snail_mail.jpg",
+            tagline: "Postage due: Paid in blunt force.",
+            description: "Starts at 1/3 base velocity, accelerating in flight. Kinetic impact damage scales up exponentially with final hit speed.",
+            apply: (player) => {
+              player.hasSnailMailJoker = true;
+              logDebug(1, "Balatro Joker activated: Snail Mail", { hasSnailMailJoker: true });
+            }
+          },
+          {
+            id: "joker_superposition",
+            isJoker: true,
+            title: "Superposition",
+            tierName: "JOKER",
+            rarityTier: "RARE",
+            rarityColor: "#06b6d4",
+            imageSrc: "/joker_superposition.jpg",
+            tagline: "Indeterminate until measured... with your face.",
+            description: "Doubles projectile count with entangled pairs. When one hits, 50% chance to be real; the fake collapses while the other continues.",
+            apply: (player) => {
+              player.hasSuperpositionJoker = true;
+              logDebug(1, "Balatro Joker activated: Superposition", { hasSuperpositionJoker: true });
+            }
+          }
+        ];
+
+        // Note: Joker card art is generated procedurally on-canvas (see
+        // drawJokerPixelArt) rather than loaded from external image files,
+        // so there's nothing to preload here. this.jokerImages is kept as an
+        // empty lookup so drawOverlay's "loaded image" fast-path is simply
+        // always skipped in favor of the pixel-art fallback.
+        this.jokerImages = {};
+
+        this.activeCards = [];
+        this.hoveredCardIndex = -1;
+
+        logDebug(1, "UpgradeManager catalog initialized", {
+          totalCards: this.upgradeCatalog.length,
+          totalJokers: this.jokerCatalog.length
+        });
+      }
+
+      /**
+       * Selects 3 distinct random upgrades from the catalog to present on level up.
+       * Has an authentic 1 in 200 chance (0.5%) to substitute a slot with a Balatro Joker.
+       *
+       * How to call:
+       *   upgradeMgr.generateOfferings(forceJoker);
+       *
+       * @param {boolean} [forceJoker=false] - For test button verification.
+       * @returns {Array<Object>} Array of 3 distinct upgrade objects.
+       */
+      generateOfferings(forceJoker = false) {
+        const pool = [...this.upgradeCatalog];
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+
+        this.activeCards = pool.slice(0, 3);
+
+        // 1 in 200 chance (0.005) or explicit forced test trigger
+        const roll = Math.random();
+        const shouldSpawnJoker = forceJoker || (roll < 0.005);
+        if (shouldSpawnJoker) {
+          const chosenJoker = this.jokerCatalog[Math.floor(Math.random() * this.jokerCatalog.length)];
+          const slot = Math.floor(Math.random() * 3);
+          this.activeCards[slot] = { ...chosenJoker };
+          logDebug(1, "1 IN 200 ROLL OCCURRED! A Balatro Joker has materialized in slot " + slot, {
+            joker: chosenJoker.title
+          });
+        }
+
+        this.hoveredCardIndex = -1;
+
+        logDebug(1, "Brotato-style upgrade offerings generated", {
+          choices: this.activeCards.map(c => c.title)
+        });
+
+        return this.activeCards;
+      }
+
+      /**
+       * Computes card bounding rectangles for canvas rendering and hit-testing.
+       *
+       * How to call:
+       *   const rects = upgradeMgr.getCardLayout(800, 600);
+       *
+       * @param {number} canvasW - Canvas width.
+       * @param {number} canvasH - Canvas height.
+       * @returns {Array<{ x: number, y: number, w: number, h: number }>}
+       */
+      getCardLayout(canvasW, canvasH) {
+        const cardW = 210;
+        const cardH = 245;
+        const gap = 20;
+        const totalW = cardW * 3 + gap * 2;
+        const startX = (canvasW - totalW) / 2;
+        const startY = canvasH / 2 - 85;
+
+        const rects = [];
+        for (let i = 0; i < 3; i++) {
+          rects.push({
+            x: startX + i * (cardW + gap),
+            y: startY,
+            w: cardW,
+            h: cardH
+          });
+        }
+        return rects;
+      }
+
+      /**
+       * Determines which upgrade card contains the given coordinate.
+       *
+       * How to call:
+       *   const idx = upgradeMgr.hitTest(mouseX, mouseY, 800, 600);
+       *
+       * @param {number} mx - Pointer X.
+       * @param {number} my - Pointer Y.
+       * @param {number} canvasW - Canvas width.
+       * @param {number} canvasH - Canvas height.
+       * @returns {number} Card index 0, 1, 2 or -1 if none hit.
+       */
+      hitTest(mx, my, canvasW, canvasH) {
+        const rects = this.getCardLayout(canvasW, canvasH);
+        for (let i = 0; i < rects.length; i++) {
+          const r = rects[i];
+          if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            return i;
+          }
+        }
+        return -1;
+      }
+
+      /**
+       * Applies chosen upgrade to player vessel.
+       *
+       * How to call:
+       *   const ok = upgradeMgr.applyUpgrade(0, player);
+       *
+       * @param {number} index - 0, 1, or 2.
+       * @param {Player} player - Target Player entity.
+       * @returns {boolean} True if successfully applied.
+       */
+      applyUpgrade(index, player) {
+        if (index >= 0 && index < this.activeCards.length) {
+          const upgrade = this.activeCards[index];
+          upgrade.apply(player);
+          if (!player.acquiredUpgrades) player.acquiredUpgrades = [];
+          player.acquiredUpgrades.push(upgrade.title);
+          logDebug(1, `Upgrade chosen and integrated: ${upgrade.title}`);
+          return true;
+        }
+        return false;
+      }
+
+      /**
+       * Renders the Brotato-style upgrade selection interface overlay onto the canvas.
+       * Supports authentic Balatro Joker card rendering, floating idle animation,
+       * pixel-art canvas tooltips, and disintegration burn effects.
+       *
+       * How to call:
+       *   upgradeMgr.drawOverlay(ctx, 800, 600, playerLevel, burnInfo);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas context.
+       * @param {number} canvasW - Canvas width.
+       * @param {number} canvasH - Canvas height.
+       * @param {number} playerLevel - Current player level.
+       * @param {Object|null} [burnInfo=null] - Disintegration burn animation state.
+       * @returns {void}
+       */
+      drawOverlay(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
+        ctx.save();
+
+        // Dark dimming backdrop
+        ctx.fillStyle = "rgba(7, 10, 19, 0.90)";
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        // Header Title
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.font = "bold 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#38bdf8";
+        ctx.shadowColor = "rgba(56, 189, 248, 0.5)";
+        ctx.shadowBlur = 14;
+        ctx.fillText(`LEVEL UP REACHED: LEVEL ${playerLevel}`, canvasW / 2, canvasH / 2 - 148);
+
+        ctx.font = "13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#94a3b8";
+        ctx.shadowBlur = 0;
+        ctx.fillText("Select 1 augmentation to integrate into vessel circuitry:", canvasW / 2, canvasH / 2 - 118);
+
+        // Render Upgrade Cards
+        const rects = this.getCardLayout(canvasW, canvasH);
+        let activeHoveredJokerCard = null;
+        let activeHoveredJokerCoord = null;
+
+        for (let i = 0; i < this.activeCards.length; i++) {
+          const card = this.activeCards[i];
+          const r = rects[i];
+          const isHovered = (this.hoveredCardIndex === i);
+          const isBurningThisCard = Boolean(burnInfo && burnInfo.active && burnInfo.cardIndex === i && card.isJoker);
+
+          ctx.save();
+
+          // If a Joker card is burning, fade unselected cards out smoothly
+          if (burnInfo && burnInfo.active && !isBurningThisCard) {
+            ctx.globalAlpha = Math.max(0, 1 - burnInfo.progress * 2.8);
+          }
+
+          if (card.isJoker) {
+            // =================================================================
+            // AUTHENTIC BALATRO JOKER PLAYING CARD RENDERING
+            // =================================================================
+            // Subtle idle float and tilt animation characteristic of Balatro
+            const idleTime = Date.now() * 0.0028;
+            let bobY = Math.sin(idleTime + i * 2.2) * 6;
+            let tilt = Math.sin(idleTime * 0.8 + i * 1.7) * 0.032;
+
+            // Authentic Balatro burn shake/vibration if this Joker is being consumed
+            if (isBurningThisCard) {
+              const burnProg = burnInfo.progress;
+              const shakeAmp = 2.0 + burnProg * 6.5;
+              bobY += (Math.random() - 0.5) * shakeAmp;
+              tilt += (Math.random() - 0.5) * 0.07 * burnProg;
+            }
+
+            ctx.save();
+            ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+            ctx.rotate(tilt);
+            ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2) + bobY);
+
+            // If this card is currently undergoing pickup burn disintegration, clip it from below
+            let burnLineY = 0;
+            if (isBurningThisCard) {
+              burnLineY = r.y + r.h * (1 - burnInfo.progress);
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(r.x - 24, r.y - 24, r.w + 48, Math.max(0, burnLineY - r.y + 24));
+              ctx.clip();
+            }
+
+            // Outer card body - Cream vintage card paper
+            ctx.fillStyle = "#faf5ea";
+            if (isHovered && !burnInfo?.active) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 24;
+            } else {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 6;
+            }
+            drawRoundedRect(ctx, r.x, r.y, r.w, r.h, 10);
+            ctx.fill();
+
+            // Bold primary colored card perimeter border: Always rarity color, dimmer when not hovered
+            const dimJokerBorder = hexToRgba(card.rarityColor, 0.60);
+            ctx.strokeStyle = isHovered ? card.rarityColor : dimJokerBorder;
+            ctx.lineWidth = isHovered ? 3.5 : 2.5;
+            if (isHovered) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 18;
+            } else {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 4;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = "transparent";
+
+            // Subtle inner hairline border
+            ctx.strokeStyle = "#e2d7c5";
+            ctx.lineWidth = 1;
+            drawRoundedRect(ctx, r.x + 4, r.y + 4, r.w - 8, r.h - 8, 8);
+            ctx.stroke();
+
+            // Top-left pixelated corner marks: "J" + mini diamond pip
+            ctx.font = "bold 13px monospace";
+            ctx.fillStyle = card.rarityColor;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("J", r.x + 15, r.y + 16);
+            ctx.fillText("♦", r.x + 15, r.y + 28);
+
+            // Bottom-right inverted pixelated corner marks
+            ctx.fillText("J", r.x + r.w - 15, r.y + r.h - 16);
+            ctx.fillText("♦", r.x + r.w - 15, r.y + r.h - 28);
+
+            // Header pill badge: [JOKER]
+            ctx.fillStyle = card.rarityColor;
+            drawRoundedRect(ctx, r.x + r.w / 2 - 28, r.y + 10, 56, 18, 4);
+            ctx.fill();
+            ctx.font = "bold 10px monospace";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText("JOKER", r.x + r.w / 2, r.y + 19);
+
+            // Center pixel art frame
+            const artW = 144;
+            const artH = 126;
+            const artX = r.x + (r.w - artW) / 2;
+            const artY = r.y + 36;
+
+            ctx.fillStyle = "#1e1e24";
+            drawRoundedRect(ctx, artX, artY, artW, artH, 6);
+            ctx.fill();
+
+            ctx.strokeStyle = "#b59f77";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Render pixel art Joker artwork
+            const jokerImg = this.jokerImages[card.id];
+            if (jokerImg && jokerImg.complete && jokerImg.naturalWidth > 0) {
+              ctx.save();
+              ctx.imageSmoothingEnabled = false; // Pixel-perfect crispness
+              ctx.beginPath();
+              drawRoundedRect(ctx, artX + 2, artY + 2, artW - 4, artH - 4, 4);
+              ctx.clip();
+              ctx.drawImage(jokerImg, artX + 2, artY + 2, artW - 4, artH - 4);
+              ctx.restore();
+            } else {
+              ctx.save();
+              ctx.beginPath();
+              drawRoundedRect(ctx, artX + 2, artY + 2, artW - 4, artH - 4, 4);
+              ctx.clip();
+              drawJokerPixelArt(ctx, card.id, artX + 2, artY + 2, artW - 4, artH - 4);
+              ctx.restore();
+            }
+
+            // Beneath art: Card title banner (strictly no mechanics explanation on card face!)
+            ctx.fillStyle = "#f3ede0";
+            drawRoundedRect(ctx, r.x + 20, r.y + 172, r.w - 40, 26, 4);
+            ctx.fill();
+            ctx.strokeStyle = "#cbba9f";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.font = "bold 13px 'Courier New', monospace";
+            ctx.fillStyle = "#1c1917";
+            ctx.textAlign = "center";
+            ctx.fillText(card.title.toUpperCase(), r.x + r.w / 2, r.y + 185);
+
+            // Bottom action pill: Glows with rarity color on hover, dimmer when idle
+            const btnW = r.w - 36;
+            const btnH = 26;
+            const btnX = r.x + 18;
+            const btnY = r.y + r.h - 36;
+
+            ctx.save();
+            if (isHovered) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 14;
+              ctx.fillStyle = card.rarityColor;
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = "#292524";
+            }
+            drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 4);
+            ctx.fill();
+
+            if (!isHovered) {
+              ctx.strokeStyle = hexToRgba(card.rarityColor, 0.45);
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.font = "bold 11px monospace";
+            ctx.fillStyle = isHovered ? "#ffffff" : "#d6d3d1";
+            ctx.fillText(isHovered ? "SELECT JOKER" : "HOVER FOR STATS", btnX + btnW / 2, btnY + btnH / 2);
+
+            // If clipped for burn, restore the clip now and draw Balatro pixel fire frontier
+            if (isBurningThisCard) {
+              ctx.restore(); // restores burn clip
+
+              // Authentic Balatro Chunky Pixel Fire Frontier along burnLineY
+              const blockSize = 4;
+              for (let bx = r.x - 4; bx <= r.x + r.w + 4; bx += blockSize) {
+                const seed = Math.sin(bx * 0.45 + Date.now() * 0.016);
+                const flameH = 6 + Math.floor((seed + 1) * 4) + Math.floor(Math.random() * 4);
+
+                // Charred paper ash eating into unburnt edge
+                ctx.fillStyle = "#18181b";
+                ctx.fillRect(bx, burnLineY - 4, blockSize, 4);
+                if (Math.random() > 0.45) {
+                  ctx.fillStyle = "#27272a";
+                  ctx.fillRect(bx, burnLineY - 8, blockSize, 4);
+                }
+                // Crimson fiery base
+                ctx.fillStyle = "#dc2626";
+                ctx.fillRect(bx, burnLineY - 2, blockSize, flameH * 0.85);
+                // Vibrant orange flame mid
+                ctx.fillStyle = "#ea580c";
+                ctx.fillRect(bx, burnLineY - 1, blockSize, flameH * 0.6);
+                // Blazing yellow crest
+                ctx.fillStyle = "#facc15";
+                ctx.fillRect(bx, burnLineY, blockSize, flameH * 0.35);
+                // Incandescent white spark
+                if (Math.random() > 0.5) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(bx, burnLineY + 1, blockSize, 2);
+                }
+              }
+            }
+
+            ctx.restore(); // restores translate/rotate
+
+            // If card is hovered, save reference to render canvas tooltip on top of all cards
+            if (isHovered && !burnInfo?.active) {
+              activeHoveredJokerCard = card;
+              activeHoveredJokerCoord = {
+                x: i === 2 ? r.x - 275 : r.x + r.w + 14,
+                y: r.y + 10
+              };
+            }
+          } else {
+            // =================================================================
+            // STANDARD SCI-FI BROTATO-STYLE UPGRADE CARD
+            // =================================================================
+            ctx.fillStyle = isHovered ? "#162032" : "#0f172a";
+            drawRoundedRect(ctx, r.x, r.y, r.w, r.h, 6);
+            ctx.fill();
+
+            // Card outline: The border color is always the card's rarity color.
+            // When not hovered, it is dimmer and less glowy; when hovered, it shows at full glow.
+            const dimBorderColor = hexToRgba(card.rarityColor, 0.45);
+            ctx.strokeStyle = isHovered ? card.rarityColor : dimBorderColor;
+            ctx.lineWidth = isHovered ? 2.5 : 1.5;
+            if (isHovered) {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 18;
+            } else {
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 4;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = "transparent";
+
+            // Keyboard shortcut pill [1], [2], [3] (carefully balanced without leaked save)
+            ctx.fillStyle = "#1e293b";
+            drawRoundedRect(ctx, r.x + 12, r.y + 12, 28, 20, 3);
+            ctx.fill();
+            ctx.strokeStyle = "#475569";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.font = "bold 11px monospace";
+            ctx.fillStyle = "#f1f5f9";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`[${i + 1}]`, r.x + 26, r.y + 22);
+
+            // Rarity tag
+            ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.textAlign = "right";
+            ctx.fillStyle = card.rarityColor;
+            ctx.fillText(card.tierName, r.x + r.w - 12, r.y + 22);
+
+            // Card Title
+            ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(card.title, r.x + r.w / 2, r.y + 70);
+
+            // Dividing line
+            ctx.strokeStyle = "#1e293b";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(r.x + 16, r.y + 92);
+            ctx.lineTo(r.x + r.w - 16, r.y + 92);
+            ctx.stroke();
+
+            // Description text
+            ctx.font = "12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.fillStyle = "#cbd5e1";
+            ctx.textAlign = "center";
+
+            const words = card.description.split(" ");
+            let line = "";
+            let lineY = r.y + 120;
+
+            for (let wIdx = 0; wIdx < words.length; wIdx++) {
+              const testLine = line + words[wIdx] + " ";
+              const metrics = ctx.measureText(testLine);
+              if (metrics.width > r.w - 30 && wIdx > 0) {
+                ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+                line = words[wIdx] + " ";
+                lineY += 18;
+              } else {
+                line = testLine;
+              }
+            }
+            ctx.fillText(line.trim(), r.x + r.w / 2, lineY);
+
+            // Action button base: Glows with full rarity color when card is hovered
+            const btnW = r.w - 32;
+            const btnH = 30;
+            const btnX = r.x + 16;
+            const btnY = r.y + r.h - 42;
+
+            ctx.save();
+            if (isHovered) {
+              // Making the click to equip button glow with the card's rarity color
+              ctx.shadowColor = card.rarityColor;
+              ctx.shadowBlur = 16;
+              ctx.fillStyle = card.rarityColor;
+            } else {
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = "#1e293b";
+            }
+            drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 4);
+            ctx.fill();
+
+            // When not hovered, give button outline a subtle matching dim rarity color
+            if (!isHovered) {
+              ctx.strokeStyle = hexToRgba(card.rarityColor, 0.35);
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            ctx.fillStyle = isHovered ? "#000000" : "#94a3b8";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(isHovered ? "SELECT UPGRADE" : "CLICK TO EQUIP", btnX + btnW / 2, btnY + btnH / 2);
+          }
+
+          ctx.restore();
+        }
+
+        // =====================================================================
+        // AUTHENTIC BALATRO CHUNKY SQUARE PIXEL EMBER PARTICLES
+        // =====================================================================
+        if (burnInfo && burnInfo.active && burnInfo.embers && burnInfo.embers.length > 0) {
+          ctx.save();
+          for (let emIdx = 0; emIdx < burnInfo.embers.length; emIdx++) {
+            const ember = burnInfo.embers[emIdx];
+            const lifeRatio = Math.max(0, ember.life / (ember.maxLife || 0.5));
+
+            // Balatro pixel color cooling shift: white -> yellow -> orange -> crimson
+            let emberColor = "#b91c1c";
+            if (lifeRatio > 0.65) emberColor = "#ffffff";
+            else if (lifeRatio > 0.4) emberColor = "#facc15";
+            else if (lifeRatio > 0.2) emberColor = "#f97316";
+
+            ctx.fillStyle = emberColor;
+            ctx.fillRect(Math.round(ember.x), Math.round(ember.y), ember.size, ember.size);
+          }
+          ctx.restore();
+        }
+
+        // =====================================================================
+        // BALATRO CANVAS HOVER TOOLTIP
+        // =====================================================================
+        if (activeHoveredJokerCard && activeHoveredJokerCoord) {
+          this.drawBalatroCanvasTooltip(
+            ctx,
+            activeHoveredJokerCard,
+            activeHoveredJokerCoord.x,
+            activeHoveredJokerCoord.y
+          );
+        }
+
+        ctx.restore();
+      }
+
+      /**
+       * Renders an authentic Balatro-style canvas tooltip when hovering over a Joker card.
+       *
+       * How to call:
+       *   upgradeMgr.drawBalatroCanvasTooltip(ctx, card, 300, 150);
+       *
+       * @param {CanvasRenderingContext2D} ctx - Canvas rendering context.
+       * @param {Object} card - Balatro Joker card object.
+       * @param {number} x - Left coordinate.
+       * @param {number} y - Top coordinate.
+       * @returns {void}
+       */
+      drawBalatroCanvasTooltip(ctx, card, x, y) {
+        ctx.save();
+        const tipW = 270;
+        const tipH = 205;
+
+        // Keep tooltip strictly bounded inside arena canvas
+        const drawX = Math.max(12, Math.min(800 - tipW - 12, x));
+        const drawY = Math.max(12, Math.min(600 - tipH - 12, y));
+
+        // Dark charcoal Balatro tooltip background
+        ctx.fillStyle = "#181c24";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+        ctx.shadowBlur = 24;
+        drawRoundedRect(ctx, drawX, drawY, tipW, tipH, 8);
+        ctx.fill();
+
+        // Thick solid white border
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "transparent";
+        ctx.stroke();
+
+        // Top badges row: [JOKER] + [RARITY]
+        ctx.fillStyle = "#dc2626";
+        drawRoundedRect(ctx, drawX + 14, drawY + 12, 54, 20, 4);
+        ctx.fill();
+        ctx.font = "bold 10px monospace";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("JOKER", drawX + 41, drawY + 22);
+
+        const isRare = card.rarityTier === "RARE";
+        ctx.fillStyle = isRare ? "#8b5cf6" : "#10b981";
+        drawRoundedRect(ctx, drawX + 74, drawY + 12, 82, 20, 4);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(card.rarityTier, drawX + 115, drawY + 22);
+
+        // Title
+        ctx.font = "bold 17px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(card.title, drawX + 14, drawY + 54);
+
+        // Divider
+        ctx.strokeStyle = "#334155";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(drawX + 14, drawY + 68);
+        ctx.lineTo(drawX + tipW - 14, drawY + 68);
+        ctx.stroke();
+
+        // Pun / Vague flavor tagline
+        ctx.font = "italic 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#fef08a";
+        ctx.fillText(`"${card.tagline}"`, drawX + 14, drawY + 86);
+
+        // Mechanics lines with high contrast highlighted stats
+        ctx.font = "11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        ctx.fillStyle = "#e2e8f0";
+
+        if (card.id === "joker_snail_mail") {
+          ctx.fillText("• Projectiles launch at 1/3 base velocity", drawX + 14, drawY + 110);
+          ctx.fillText("• Accelerates continuously during flight", drawX + 14, drawY + 128);
+          ctx.fillStyle = "#fb923c";
+          ctx.fillText("• Impact damage scales exponentially", drawX + 14, drawY + 148);
+          ctx.fillText("  with final impact velocity", drawX + 14, drawY + 164);
+        } else {
+          ctx.fillText("• Doubles projectiles into quantum pairs", drawX + 14, drawY + 110);
+          ctx.fillText("• Entangled with slight direction offset", drawX + 14, drawY + 128);
+          ctx.fillStyle = "#38bdf8";
+          ctx.fillText("• 50% chance on hit to be the real bullet;", drawX + 14, drawY + 148);
+          ctx.fillText("  fake collapses, twin continues flying", drawX + 14, drawY + 164);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * Class: GameManager
+     * =========================================================================
+     * Master controller for the arena survival simulation:
+     * - Delta time measurement via requestAnimationFrame
+     * - Distinct entity arrays (projectiles, enemyProjectiles, enemies, droppedItems, floatingTexts)
+     * - Auto-combat target vector acquisition targeting closest hostile center
+     * - Entity garbage collection (clean backwards splicing)
+     * - Brotato-style level up upgrade integration
+     * - Mathematical EXP leveling curve with surplus carryover
+     * - Escalating boss encounters every 3 levels with custom attack mechanics
+     * =========================================================================
+     */
+
+    /* ===== src/js/04-game-manager.js ===== */
+class GameManager {
+      /**
+       * Constructs and initializes the GameManager.
+       *
+       * How to call:
+       *   const game = new GameManager(document.getElementById("gameCanvas"));
+       *   game.init();
+       *
+       * @param {HTMLCanvasElement} canvas - The HTML5 canvas element.
+       */
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext("2d");
+
+        // Logical game coordinate dimensions
+        this.width = 800;
+        this.height = 600;
+
+        // State Machine: 'PLAYING', 'LEVEL_UP', 'GAME_OVER'
+        this.state = "PLAYING";
+
+        // Active keyboard tracking
+        this.activeKeys = new Set();
+
+        // Distinct entity collections
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.enemies = [];
+        this.droppedItems = [];
+        this.floatingTexts = [];
+        this.lightningArcs = [];
+        this.blastEffects = [];
+
+        // Player instantiation in center of arena
+        this.player = new Player(this.width / 2, this.height / 2);
+
+        // Brotato-style Upgrade System
+        this.upgradeManager = new UpgradeManager();
+
+        // Auto-combat parameters
+        this.autoFireTimer = 0.0;
+
+        // Enemy spawner parameters
+        this.spawnInterval = 1.1;
+        this.spawnTimer = 0.0;
+        this.enemySpeedBase = 90;
+
+        // Player Progression & Mathematical EXP Curve
+        this.playerLevel = 1;
+        this.currentXp = 0;
+        this.xpThreshold = this.calculateXpThreshold(1); // 3 XP for immediate level-up access
+        this.totalScore = 0;
+        this.totalKills = 0;
+
+        // Boss encounter management
+        this.bossTier = 1;
+        this.activeBoss = null;
+        this.bossWarningTimer = 0;
+
+        // High-DPI canvas scaling factor
+        this.dpr = window.devicePixelRatio || 1;
+
+        // Frame timing
+        this.lastTimestamp = 0;
+        this.animationFrameId = null;
+
+        // Pointer tracking
+        this.mouseX = 0;
+        this.mouseY = 0;
+
+        // Level-up card selection "burn" (disintegration) animation state.
+        // When active, drawOverlay renders the chosen card burning away before
+        // the upgrade is actually applied and the overlay closes. Also used
+        // to gate the Balatro Joker pickup -> rack reveal sequence.
+        this.cardBurn = {
+          active: false,
+          cardIndex: -1,
+          progress: 0,
+          embers: [],
+          pendingCard: null
+        };
+        this.cardBurnDuration = 0.55; // seconds
+
+        // DOM element references
+        this.hudSector = document.getElementById("hudSector");
+        this.hudScore = document.getElementById("hudScore");
+        this.hudKills = document.getElementById("hudKills");
+        this.hudHp = document.getElementById("hudHp");
+        this.hudLevel = document.getElementById("hudLevel");
+        this.hudXp = document.getElementById("hudXp");
+        this.hudRange = document.getElementById("hudRange");
+        this.hudUpgrades = document.getElementById("hudUpgrades");
+
+        logDebug(1, "GameManager instance initialized with Brotato upgrades and EXP leveling curve", {
+          width: this.width,
+          height: this.height,
+          initialXpThreshold: this.xpThreshold
+        });
+      }
+
+      /**
+       * Calculates the required XP threshold for a given player level.
+       * Implements a standard survivor-genre progressive curve:
+       * Early levels are fast and punchy to introduce player agency,
+       * while later levels require escalating harvesting.
+       *
+       * Curve progression (10x scaling):
+       *   Level 1: 30 XP (fast immediate level-up)
+       *   Level 2: 60 XP
+       *   Level 3: 100 XP
+       *   Level 4: 150 XP
+       *   Level 5: 210 XP
+       *   Level 6: 280 XP
+       *
+       * How to call:
+       *   const target = game.calculateXpThreshold(level);
+       *
+       * @param {number} level - Current player level (1-indexed).
+       * @returns {number} Target XP requirement for this level.
+       */
+      calculateXpThreshold(level) {
+        if (level === 1) return 30;
+        if (level === 2) return 60;
+        if (level === 3) return 100;
+        const base = 100;
+        const linear = (level - 3) * 40;
+        const quadratic = Math.floor(Math.pow(level - 3, 1.3) * 20);
+        return base + linear + quadratic;
+      }
+
+      /**
+       * Pauses active combat simulation and opens the Brotato-style upgrade selection overlay.
+       *
+       * How to call:
+       *   this.triggerLevelUp();
+       *
+       * @returns {void}
+       */
+      triggerLevelUp() {
+        this.state = "LEVEL_UP";
+        this.upgradeManager.generateOfferings();
+        logDebug(1, "LEVEL UP TRIGGERED! Game paused for upgrade selection.", {
+          level: this.playerLevel,
+          currentXp: this.currentXp,
+          threshold: this.xpThreshold
+        });
+      }
+
+      /**
+       * Configures canvas dimensions, binds listeners, and launches main loop.
+       *
+       * How to call:
+       *   game.init();
+       *
+       * @returns {void}
+       */
+      init() {
+        this.canvas.width = this.width * this.dpr;
+        this.canvas.height = this.height * this.dpr;
+        this.ctx.scale(this.dpr, this.dpr);
+
+        this.bindEvents();
+        this.updateHUD();
+
+        logDebug(1, "Canvas initialized with High-DPI support", { dpr: this.dpr });
+
+        this.lastTimestamp = performance.now();
+        this.animationFrameId = requestAnimationFrame((ts) => this.gameLoop(ts));
+      }
+
+      /**
+       * Registers keyboard, pointer, and debug UI event listeners.
+       *
+       * How to call:
+       *   this.bindEvents();
+       *
+       * @returns {void}
+       */
+      bindEvents() {
+        window.addEventListener("keydown", (e) => {
+          this.activeKeys.add(e.code);
+          logDebug(4, "Key down event", { code: e.code, key: e.key });
+
+          // Start game on movement key if in READY state
+          if (this.state === "READY") {
+            if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+              this.startGame();
+            }
+          }
+
+          // Hotkey selection for upgrades [1], [2], [3] during LEVEL_UP
+          if (this.state === "LEVEL_UP") {
+            if (e.key === "1" || e.code === "Digit1" || e.code === "Numpad1") {
+              this.selectUpgradeByIndex(0);
+            } else if (e.key === "2" || e.code === "Digit2" || e.code === "Numpad2") {
+              this.selectUpgradeByIndex(1);
+            } else if (e.key === "3" || e.code === "Digit3" || e.code === "Numpad3") {
+              this.selectUpgradeByIndex(2);
+            }
+          }
+
+          // Hotkey [L] for manual level-up testing during active gameplay
+          if (e.code === "KeyL" || e.key === "l" || e.key === "L") {
+            if (this.state === "READY") {
+              this.startGame();
+            }
+            if (this.state === "PLAYING") {
+              this.currentXp = this.xpThreshold;
+              this.triggerLevelUp();
+            }
+          }
+        });
+
+        window.addEventListener("keyup", (e) => {
+          this.activeKeys.delete(e.code);
+          logDebug(4, "Key up event", { code: e.code });
+        });
+
+        // Pointer move event tracking
+        const updatePointerCoordinates = (clientX, clientY) => {
+          const rect = this.canvas.getBoundingClientRect();
+          this.mouseX = (clientX - rect.left) * (this.width / rect.width);
+          this.mouseY = (clientY - rect.top) * (this.height / rect.height);
+        };
+
+        this.canvas.addEventListener("mousemove", (e) => {
+          updatePointerCoordinates(e.clientX, e.clientY);
+
+          if (this.state === "LEVEL_UP") {
+            const hit = this.upgradeManager.hitTest(this.mouseX, this.mouseY, this.width, this.height);
+            this.upgradeManager.hoveredCardIndex = hit;
+            this.canvas.style.cursor = hit !== -1 ? "pointer" : "default";
+          } else {
+            this.canvas.style.cursor = "crosshair";
+          }
+        });
+
+        // Canvas click handler
+        this.canvas.addEventListener("click", (e) => {
+          updatePointerCoordinates(e.clientX, e.clientY);
+          this.handleCanvasClick();
+        });
+
+        // Interactive debug level buttons in footer
+        const debugButtons = document.querySelectorAll(".debug-btn[data-level]");
+        debugButtons.forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            const newLevel = parseInt(e.currentTarget.getAttribute("data-level"), 10);
+            this.setDebugLevel(newLevel);
+
+            debugButtons.forEach((b) => b.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+          });
+        });
+
+        // Quick testing button for immediate level-up presentation
+        const testLevelUpBtn = document.getElementById("btnTestLevelUp");
+        if (testLevelUpBtn) {
+          testLevelUpBtn.addEventListener("click", () => {
+            if (this.state === "READY") {
+              this.startGame();
+            }
+            this.currentXp = this.xpThreshold;
+            this.triggerLevelUp();
+          });
+        }
+
+        const hudLevelUpBtn = document.getElementById("btnHudLevelUp");
+        if (hudLevelUpBtn) {
+          hudLevelUpBtn.addEventListener("click", () => {
+            if (this.state === "READY") {
+              this.startGame();
+            }
+            this.currentXp = this.xpThreshold;
+            this.triggerLevelUp();
+          });
+        }
+
+        // Test button to guarantee a Balatro Joker offering
+        const testJokerBtn = document.getElementById("btnTestJoker");
+        if (testJokerBtn) {
+          testJokerBtn.addEventListener("click", () => {
+            if (this.state === "READY") {
+              this.startGame();
+            }
+            this.state = "LEVEL_UP";
+            this.upgradeManager.generateOfferings(true);
+            logDebug(1, "Test button: Forced Balatro Joker offering generated");
+          });
+        }
+
+        logDebug(1, "Event listeners bound successfully");
+      }
+
+      /**
+       * Mutates active debug integer flag and informs console.
+       *
+       * How to call:
+       *   game.setDebugLevel(2);
+       *
+       * @param {number} level - New debug integer flag (0 to 4).
+       * @returns {void}
+       */
+      setDebugLevel(level) {
+        DEBUG_LEVEL = Math.max(0, Math.min(4, level));
+        console.log(`[DEBUG LEVEL UPDATED] Active Level is now: ${DEBUG_LEVEL}`);
+        logDebug(1, `Debug verbosity switched to level ${DEBUG_LEVEL}`);
+      }
+
+      /**
+       * Handles canvas pointer click events across states.
+       *
+       * How to call:
+       *   this.handleCanvasClick();
+       *
+       * @returns {void}
+       */
+      handleCanvasClick() {
+        logDebug(2, "Canvas clicked", { currentState: this.state, x: this.mouseX, y: this.mouseY });
+
+        if (this.state === "READY") {
+          this.startGame();
+        } else if (this.state === "LEVEL_UP") {
+          if (this.cardBurn.active) return; // Ignore clicks mid-animation
+          const hit = this.upgradeManager.hitTest(this.mouseX, this.mouseY, this.width, this.height);
+          if (hit !== -1) {
+            this.selectUpgradeByIndex(hit);
+          }
+        } else if (this.state === "GAME_OVER") {
+          this.restartGame();
+        }
+      }
+
+      /**
+       * Transitions state machine from READY to PLAYING.
+       *
+       * How to call:
+       *   this.startGame();
+       *
+       * @returns {void}
+       */
+      startGame() {
+        this.state = "PLAYING";
+        this.lastTimestamp = performance.now();
+        logDebug(1, "State Transition: READY -> PLAYING. Combat simulation active.");
+      }
+
+      /**
+       * Kicks off the card-disintegration "burn" animation for the chosen
+       * card ONLY when selecting a Balatro Joker card. Normal upgrades are
+       * applied immediately without any burn animation or delay.
+       *
+       * How to call:
+       *   this.selectUpgradeByIndex(0);
+       *
+       * @param {number} index - 0, 1, or 2.
+       * @returns {void}
+       */
+      selectUpgradeByIndex(index) {
+        if (this.cardBurn.active) return;
+        if (index < 0 || index >= this.upgradeManager.activeCards.length) return;
+
+        const chosenCard = this.upgradeManager.activeCards[index];
+        if (!chosenCard) return;
+
+        // The burn animation should ONLY happen when picking a rare Joker card!
+        // Normal upgrades apply immediately without any burn or delay.
+        if (chosenCard.isJoker) {
+          this.cardBurn.active = true;
+          this.cardBurn.cardIndex = index;
+          this.cardBurn.progress = 0;
+          this.cardBurn.embers = [];
+          this.cardBurn.pendingCard = chosenCard;
+
+          logDebug(1, "Rare Balatro Joker card selected, beginning authentic card burn disintegration", {
+            index,
+            card: chosenCard.title
+          });
+        } else {
+          logDebug(1, "Standard upgrade card selected, applying immediately without burn", {
+            index,
+            card: chosenCard.title
+          });
+          this.finalizeCardSelection(index);
+        }
+      }
+
+      /**
+       * Advances the active card-burn animation by dt. Called every frame
+       * while state === "LEVEL_UP". Triggers finalizeCardSelection once the
+       * animation completes.
+       *
+       * How to call:
+       *   this.updateCardBurn(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      updateCardBurn(dt) {
+        if (!this.cardBurn.active) return;
+        this.cardBurn.progress += dt / this.cardBurnDuration;
+
+        // Procedurally spawn chunky pixel embers along the burning frontier
+        const rects = this.upgradeManager.getCardLayout(this.width, this.height);
+        if (this.cardBurn.cardIndex >= 0 && this.cardBurn.cardIndex < rects.length) {
+          const r = rects[this.cardBurn.cardIndex];
+          const burnLineY = r.y + r.h * (1 - this.cardBurn.progress);
+
+          // Spawn 3-5 chunky pixel embers per frame
+          const spawnCount = 3 + Math.floor(Math.random() * 3);
+          for (let e = 0; e < spawnCount; e++) {
+            this.cardBurn.embers.push({
+              x: r.x + Math.random() * r.w,
+              y: burnLineY + (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 45,
+              vy: -70 - Math.random() * 110,
+              size: 3 + Math.floor(Math.random() * 3), // chunky 3-5px pixel blocks
+              life: 0.3 + Math.random() * 0.25,
+              maxLife: 0.55,
+              seed: Math.random() * 10
+            });
+          }
+
+          // Advance embers with sinusoidal sway
+          for (let emIdx = this.cardBurn.embers.length - 1; emIdx >= 0; emIdx--) {
+            const ember = this.cardBurn.embers[emIdx];
+            ember.life -= dt;
+            if (ember.life <= 0) {
+              this.cardBurn.embers.splice(emIdx, 1);
+              continue;
+            }
+            ember.x += (ember.vx + Math.sin(ember.seed + ember.life * 15) * 20) * dt;
+            ember.y += ember.vy * dt;
+          }
+        }
+
+        if (this.cardBurn.progress >= 1) {
+          this.cardBurn.progress = 1;
+          const index = this.cardBurn.cardIndex;
+          this.cardBurn.active = false;
+          this.cardBurn.cardIndex = -1;
+          this.cardBurn.embers = [];
+          this.cardBurn.pendingCard = null;
+          this.finalizeCardSelection(index);
+        }
+      }
+
+      /**
+       * Applies the chosen upgrade to the player vessel, advances player level,
+       * checks boss spawn, carries over surplus XP against the new threshold
+       * curve, and resumes the loop. If the chosen card is a Balatro Joker,
+       * routes it through onJokerAcquired to trigger the rack reveal instead.
+       *
+       * How to call:
+       *   this.finalizeCardSelection(0);
+       *
+       * @param {number} index - 0, 1, or 2.
+       * @returns {void}
+       */
+      finalizeCardSelection(index) {
+        const chosenCard = this.upgradeManager.activeCards[index];
+        const applied = this.upgradeManager.applyUpgrade(index, this.player);
+        if (!applied) return;
+
+        if (chosenCard && chosenCard.isJoker) {
+          this.onJokerAcquired(chosenCard);
+        }
+
+        // Deduct threshold and retain surplus XP for next level
+        this.currentXp -= this.xpThreshold;
+        if (this.currentXp < 0) this.currentXp = 0;
+
+        this.playerLevel += 1;
+        this.xpThreshold = this.calculateXpThreshold(this.playerLevel);
+        this.enemySpeedBase += 3; // Gradual difficulty ramping
+
+        // Visual floating level-up acknowledgment
+        this.floatingTexts.push(
+          new FloatingText(this.player.x, this.player.y - 28, `LEVEL ${this.playerLevel}!`, "#38bdf8", 1.2)
+        );
+
+        // Check if an escalating boss should spawn (every 3 levels: level 3, 6, 9...)
+        if (this.playerLevel % 3 === 0 && !this.activeBoss) {
+          this.triggerBossWarning();
+        }
+
+        // If surplus XP is already enough for another level up:
+        if (this.currentXp >= this.xpThreshold) {
+          this.upgradeManager.generateOfferings();
+          logDebug(1, "Surplus XP immediately triggers consecutive level up choice!");
+        } else {
+          this.state = "PLAYING";
+          this.lastTimestamp = performance.now(); // Baseline reset prevents delta time jump
+        }
+
+        this.updateHUD();
+
+        logDebug(1, "Upgrade applied and progression updated", {
+          newLevel: this.playerLevel,
+          surplusXp: this.currentXp,
+          nextThreshold: this.xpThreshold
+        });
+      }
+
+      /**
+       * Triggers a visual warning banner for 2.2 seconds before the boss entity arrives.
+       *
+       * How to call:
+       *   this.triggerBossWarning();
+       *
+       * @returns {void}
+       */
+      triggerBossWarning() {
+        this.bossWarningTimer = 2.2;
+        logDebug(1, "Boss warning sequence started! High threat approaching.");
+      }
+
+      /**
+       * Spawns an escalating BossEnemy at the perimeter of the arena.
+       *
+       * How to call:
+       *   this.spawnBoss();
+       *
+       * @returns {void}
+       */
+      spawnBoss() {
+        const tier = Math.floor(this.playerLevel / 3);
+        this.bossTier = tier;
+        const boss = new BossEnemy(this.width / 2, -50, tier, this.width, this.height);
+        this.enemies.push(boss);
+        this.activeBoss = boss;
+
+        logDebug(1, "Boss spawned in arena", {
+          name: boss.name,
+          tier: boss.tier,
+          health: boss.health
+        });
+      }
+
+      /**
+       * Reinitializes all entity collections and stats following Game Over.
+       *
+       * How to call:
+       *   this.restartGame();
+       *
+       * @returns {void}
+       */
+      restartGame() {
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.enemies = [];
+        this.droppedItems = [];
+        this.floatingTexts = [];
+        this.lightningArcs = [];
+        this.blastEffects = [];
+
+        this.player.reset(this.width / 2, this.height / 2);
+        this.playerLevel = 1;
+        this.currentXp = 0;
+        this.xpThreshold = this.calculateXpThreshold(1);
+        this.totalScore = 0;
+        this.totalKills = 0;
+        this.enemySpeedBase = 90;
+        this.autoFireTimer = 0.0;
+        this.spawnTimer = 0.0;
+        this.activeBoss = null;
+        this.bossWarningTimer = 0;
+
+        this.state = "PLAYING";
+        this.lastTimestamp = performance.now();
+        this.updateHUD();
+
+        // Reset the card-burn animation state and the joker rack DOM back to
+        // its fully-hidden, zero-trace starting condition.
+        this.cardBurn = { active: false, cardIndex: -1, progress: 0, embers: [], pendingCard: null };
+        const rack = document.getElementById("balatro-joker-rack");
+        if (rack) rack.classList.remove("joker-rack-active");
+        for (let s = 0; s < 5; s++) {
+          const slotEl = document.getElementById(`jokerSlot${s}`);
+          if (slotEl) {
+            slotEl.classList.add("empty");
+            slotEl.innerHTML = "";
+          }
+        }
+        const counterLabel = document.getElementById("jokerCountLabel");
+        if (counterLabel) counterLabel.textContent = "0 / 5";
+        this.hideJokerTooltip();
+
+        logDebug(1, "State Transition: GAME_OVER -> PLAYING. Simulation re-initialized.");
+      }
+
+      /**
+       * Transitions state machine to GAME_OVER upon player depletion.
+       *
+       * How to call:
+       *   this.triggerGameOver();
+       *
+       * @returns {void}
+       */
+      triggerGameOver() {
+        this.state = "GAME_OVER";
+        this.updateHUD();
+        logDebug(1, "State Transition: -> GAME_OVER. Player vessel destroyed.", {
+          finalScore: this.totalScore,
+          finalLevel: this.playerLevel,
+          totalKills: this.totalKills
+        });
+      }
+
+      /**
+       * Finds the closest enemy to the player using Euclidean vector calculations,
+       * constrained to a maximum targeting range.
+       *
+       * How to call:
+       *   const target = this.findNearestEnemy(this.player.weaponRange);
+       *   if (target.enemy) { ... }
+       *
+       * @param {number} [maxRange=Infinity] - Maximum targeting acquisition range in pixels.
+       * @returns {{ enemy: Enemy|null, distance: number, unitX: number, unitY: number }}
+       */
+      findNearestEnemy(maxRange = Infinity) {
+        if (this.enemies.length === 0) {
+          return { enemy: null, distance: Infinity, unitX: 0, unitY: 0 };
+        }
+
+        let nearestEnemy = null;
+        let minDistanceSq = maxRange === Infinity ? Infinity : maxRange * maxRange;
+        let nearestDx = 0;
+        let nearestDy = 0;
+
+        for (let i = 0; i < this.enemies.length; i++) {
+          const enemy = this.enemies[i];
+          if (enemy.isDestroyed) continue;
+
+          const dx = enemy.x - this.player.x;
+          const dy = enemy.y - this.player.y;
+          const distSq = dx * dx + dy * dy;
+
+          if (distSq <= minDistanceSq) {
+            minDistanceSq = distSq;
+            nearestEnemy = enemy;
+            nearestDx = dx;
+            nearestDy = dy;
+          }
+        }
+
+        if (!nearestEnemy) {
+          return { enemy: null, distance: Infinity, unitX: 0, unitY: 0 };
+        }
+
+        const distance = Math.sqrt(minDistanceSq);
+        const unitX = distance > 0 ? nearestDx / distance : 0;
+        const unitY = distance > 0 ? nearestDy / distance : 0;
+
+        return { enemy: nearestEnemy, distance, unitX, unitY };
+      }
+
+      /**
+       * Auto-combat logic: Automatically fires projectiles targeting the nearest enemy
+       * center within finite weapon range based on fireInterval, damage, multishot count, and pierce stats.
+       *
+       * How to call:
+       *   this.handleAutoCombat(dt);
+       *
+       * @param {number} dt - Delta time in seconds.
+       * @returns {void}
+       */
+      handleAutoCombat(dt) {
+        this.autoFireTimer += dt;
+
+        if (this.autoFireTimer >= this.player.fireInterval) {
+          this.autoFireTimer -= this.player.fireInterval;
+
+          const target = this.findNearestEnemy(this.player.weaponRange);
+          if (target.enemy !== null) {
+            const baseAngle = Math.atan2(target.unitY, target.unitX);
+            const count = this.player.multishotCount;
+
+            const spreadStep = 0.14; // radians
+            const startAngle = baseAngle - ((count - 1) * spreadStep) / 2;
+
+            for (let m = 0; m < count; m++) {
+              const shotAngle = startAngle + m * spreadStep;
+
+              // Check critical strike roll
+              const isCrit = Math.random() < this.player.critChance;
+              const damage = isCrit ? Math.round(this.player.damage * this.player.critMultiplier) : this.player.damage;
+
+              const spawnProjectile = (angleOffset = 0) => {
+                const finalAngle = shotAngle + angleOffset;
+                let vx = Math.cos(finalAngle) * this.player.projectileSpeed;
+                let vy = Math.sin(finalAngle) * this.player.projectileSpeed;
+
+                const projectile = new Projectile(
+                  this.player.x,
+                  this.player.y,
+                  vx,
+                  vy,
+                  4.5,
+                  damage,
+                  this.player.pierceCount,
+                  "#fbbf24",
+                  isCrit,
+                  this.player.chainHits,
+                  this.player.hasExplosiveBlast,
+                  this.player.blastRadius,
+                  this.player.ricochetCount,
+                  // Range only gates targeting acquisition now; flight distance
+                  // is governed by a separate, generous ceiling (see decoupling
+                  // fix below), so weapon-range upgrades no longer clip bullets.
+                  PROJECTILE_FLIGHT_RANGE
+                );
+
+                // Balatro Joker: Snail Mail — starts at 1/3 velocity and
+                // accelerates in flight (see Projectile.update/draw).
+                if (this.player.hasSnailMailJoker) {
+                  projectile.hasSnailMail = true;
+                  projectile.vx /= 3;
+                  projectile.vy /= 3;
+                }
+
+                return projectile;
+              };
+
+              if (this.player.hasSuperpositionJoker) {
+                // Balatro Joker: Superposition — doubles this shot into an
+                // entangled pair with a slight random direction offset each.
+                // The first of the pair to hit an enemy collapses the state:
+                // 50% it's "real" (deals damage, twin fizzles), 50% it's
+                // "fake" (fizzles harmlessly, twin becomes a normal bullet).
+                const jitterA = (Math.random() - 0.5) * 0.12;
+                const jitterB = (Math.random() - 0.5) * 0.12;
+                const twinA = spawnProjectile(jitterA);
+                const twinB = spawnProjectile(jitterB);
+                const pairId = `sp_${m}_${Math.random().toString(36).slice(2, 9)}`;
+                twinA.superpositionPairId = pairId;
+                twinB.superpositionPairId = pairId;
+                twinA.twin = twinB;
+                twinB.twin = twinA;
+                this.projectiles.push(twinA, twinB);
+              } else {
+                this.projectiles.push(spawnProjectile(0));
+              }
+            }
+
+            logDebug(2, "Auto-combat: Volley fired within weapon range", {
+              count,
+              damage: this.player.damage,
+              weaponRange: this.player.weaponRange,
+              targetCoord: { x: target.enemy.x.toFixed(1), y: target.enemy.y.toFixed(1) }
+            });
+          }
+        }
+      }
+
+      /**
+       * Spawns regular and diversified tracking enemies at perimeter edges.
+       * Supports "chaser", "swarmer", "shooter", and "heavy" archetypes.
+       *
+       * How to call:
+       *   this.spawnEnemies(dt);
+       *
+       * @param {number} dt - Delta time in seconds.
+       * @returns {void}
+       */
+      spawnEnemies(dt) {
+        const currentInterval = this.activeBoss ? this.spawnInterval * 2.2 : this.spawnInterval;
+        this.spawnTimer += dt;
+
+        if (this.spawnTimer >= currentInterval) {
+          this.spawnTimer -= currentInterval;
+
+          const margin = 25;
+          const getSpawnCoord = () => {
+            const edge = Math.floor(Math.random() * 4);
+            let x = 0;
+            let y = 0;
+            switch (edge) {
+              case 0: // Top
+                x = Math.random() * this.width;
+                y = -margin;
+                break;
+              case 1: // Right
+                x = this.width + margin;
+                y = Math.random() * this.height;
+                break;
+              case 2: // Bottom
+                x = Math.random() * this.width;
+                y = this.height + margin;
+                break;
+              case 3: // Left
+                x = -margin;
+                y = Math.random() * this.height;
+                break;
+            }
+            return { x, y };
+          };
+
+          // Determine enemy archetype based on player level and weighted probabilities
+          const roll = Math.random();
+          let archetype = "chaser";
+
+          if (this.playerLevel >= 3 && roll < 0.18) {
+            archetype = "heavy";
+          } else if (this.playerLevel >= 2 && roll < 0.42) {
+            archetype = "shooter";
+          } else if (roll < 0.70) {
+            archetype = "swarmer";
+          } else {
+            archetype = "chaser";
+          }
+
+          if (archetype === "swarmer") {
+            // Swarmers spawn in fast coordinated packs of 2 to 3
+            const packSize = 2 + (Math.random() < 0.4 ? 1 : 0);
+            const { x: baseX, y: baseY } = getSpawnCoord();
+            for (let s = 0; s < packSize; s++) {
+              const sx = baseX + (Math.random() - 0.5) * 35;
+              const sy = baseY + (Math.random() - 0.5) * 35;
+              const swarmerSpeed = this.enemySpeedBase * 1.5 + (Math.random() - 0.5) * 20;
+              const swarmerHp = 14 + this.playerLevel * 3;
+              const swarmer = new Enemy(sx, sy, 8, swarmerSpeed, swarmerHp, "#ec4899", "swarmer");
+              this.enemies.push(swarmer);
+            }
+            logDebug(3, "Swarmer pack spawned", { count: packSize, baseX, baseY });
+          } else if (archetype === "shooter") {
+            const { x, y } = getSpawnCoord();
+            const shooterSpeed = Math.max(55, this.enemySpeedBase * 0.75 + (Math.random() - 0.5) * 15);
+            const shooterHp = 38 + this.playerLevel * 7;
+            const shooter = new Enemy(x, y, 14, shooterSpeed, shooterHp, "#a855f7", "shooter");
+            this.enemies.push(shooter);
+            logDebug(3, "Ranged shooter hostile spawned", { x, y });
+          } else if (archetype === "heavy") {
+            const { x, y } = getSpawnCoord();
+            const heavySpeed = Math.max(45, this.enemySpeedBase * 0.55);
+            const heavyHp = 110 + this.playerLevel * 20;
+            const heavy = new Enemy(x, y, 20, heavySpeed, heavyHp, "#f97316", "heavy");
+            this.enemies.push(heavy);
+            logDebug(3, "Armored heavy hostile spawned", { x, y });
+          } else {
+            const { x, y } = getSpawnCoord();
+            const enemySpeed = this.enemySpeedBase + (Math.random() - 0.5) * 20;
+            const enemyHp = 25 + this.playerLevel * 5;
+            const enemy = new Enemy(x, y, 12, enemySpeed, enemyHp, "#f43f5e", "chaser");
+            this.enemies.push(enemy);
+            logDebug(3, "Chaser hostile spawned", { x, y });
+          }
+        }
+      }
+
+      /**
+       * Handles enemy defeat, score calculation, dropped items, and nanite leech.
+       * Incorporates 10x XP scaling and Player Luck-based decaying XP tokens.
+       *
+       * How to call:
+       *   this.handleEnemyDefeat(enemy);
+       *
+       * @param {Enemy} enemy - The destroyed enemy instance.
+       * @returns {void}
+       */
+      handleEnemyDefeat(enemy) {
+        if (enemy.hasDroppedLoot) return;
+        enemy.hasDroppedLoot = true;
+        enemy.isDestroyed = true;
+        this.totalKills += 1;
+
+        // Nanite siphon life leech chance
+        if (this.player.lifeLeechChance > 0 && Math.random() < this.player.lifeLeechChance) {
+          const restored = this.player.heal(8);
+          if (restored > 0) {
+            this.floatingTexts.push(
+              new FloatingText(this.player.x, this.player.y - 20, `+${restored} HP`, "#34d399", 0.8)
+            );
+          }
+        }
+
+        // Clamp drop coordinates to ensure items always land safely within playable arena view
+        const dropX = Math.max(20, Math.min(this.width - 20, enemy.x));
+        const dropY = Math.max(20, Math.min(this.height - 20, enemy.y));
+
+        if (enemy.isBoss) {
+          this.totalScore += 1200 * enemy.tier;
+          this.activeBoss = null;
+
+          // Boss drops huge 50 XP Boss Cache (10x scaling)
+          const cache = new DroppedItem(dropX, dropY, 22, 50, true, "#fbbf24");
+          this.droppedItems.push(cache);
+          logDebug(1, "BOSS DEFEATED! Boss Cache dropped", { name: enemy.name, dropX, dropY });
+        } else {
+          // Standard enemies: XP value and score based on archetype (10x scaled)
+          let baseScore = 100;
+          let xpValue = 10;
+          let color = "#34d399";
+          let size = 12;
+
+          if (enemy.enemyType === "swarmer") {
+            baseScore = 60;
+            xpValue = 5;
+            color = "#6ee7b7";
+            size = 9;
+          } else if (enemy.enemyType === "shooter") {
+            baseScore = 180;
+            xpValue = 20;
+            color = "#38bdf8";
+            size = 14;
+          } else if (enemy.enemyType === "heavy") {
+            baseScore = 320;
+            xpValue = 40;
+            color = "#fbbf24";
+            size = 17;
+          }
+
+          this.totalScore += baseScore;
+
+          // Luck roll: very rare base rate (< 1%), scaling with diminishing returns
+          // toward ~50% as player acquires Lucky Charm upgrades (+1 luck each).
+          const baseLuckRate = 0.008; // 0.8% base rate (< 1%)
+          const maxLuckRate = 0.50; // Diminishing returns cap around 50%
+          const playerLuck = Math.max(0, this.player.luck || 0);
+          const diminishingCurve = 1 - Math.exp(-0.25 * playerLuck);
+          const luckDropChance = baseLuckRate + (maxLuckRate - baseLuckRate) * diminishingCurve;
+          const isLuckyDrop = Math.random() < luckDropChance;
+
+          if (isLuckyDrop) {
+            // Lucky drop gives 5x the normal node XP, decaying over 10s down to 1 XP
+            const luckyXpValue = xpValue * 5;
+            const luckySize = Math.round(size * 1.35);
+            const luckToken = new DroppedItem(
+              dropX,
+              dropY,
+              luckySize,
+              luckyXpValue,
+              false,
+              "#facc15",
+              true,
+              luckyXpValue,
+              10.0
+            );
+            this.droppedItems.push(luckToken);
+            this.floatingTexts.push(
+              new FloatingText(dropX, dropY - 16, "LUCKY DROP!", "#facc15", 0.9)
+            );
+            logDebug(2, "Lucky XP node dropped by enemy (5x multiplier)", {
+              dropX,
+              dropY,
+              luckyXpValue,
+              luckStat: playerLuck,
+              luckDropChance: (luckDropChance * 100).toFixed(1) + "%"
+            });
+          } else {
+            const xpSquare = new DroppedItem(dropX, dropY, size, xpValue, false, color);
+            this.droppedItems.push(xpSquare);
+            logDebug(2, "XP square dropped by defeated enemy", { dropX, dropY, xpValue });
+          }
+        }
+      }
+
+      /**
+       * Shatters a spent projectile into kinetic fragmentation shards on its
+       * final impact (after any piercing has already been consumed).
+       *
+       * Mechanics:
+       *  - Shard count == player.fragmentation.
+       *  - Each shard does diminishing damage relative to the previous one
+       *    (75% falloff per extra shard), but every shard still adds a
+       *    positive amount to total aggregate damage.
+       *  - Shards have a base 25% chance to pierce through an enemy, rising
+       *    with fragmentation investment (+10% per point above 1, capped).
+       *  - Spread angle widens with impact speed: a slow final hit produces
+       *    a tight cone of shards, a fast one sprays them wide.
+       *  - Spawns a small kinetic flash blast effect for feedback.
+       *
+       * How to call:
+       *   this.spawnFragments(proj, effectiveDamage, impactSpeed);
+       *
+       * @param {Projectile} proj - The projectile that just made its final impact.
+       * @param {number} hitDamage - The damage that projectile just dealt (post speed-scaling).
+       * @param {number} impactSpeed - The projectile's velocity magnitude at impact.
+       * @returns {void}
+       */
+      spawnFragments(proj, hitDamage, impactSpeed) {
+        const fragCount = Math.max(0, Math.round(this.player.fragmentation));
+        if (fragCount <= 0) return;
+
+        // Base 25% penetration chance, scaling with fragmentation (+10% per point above 1)
+        const basePierceChance = 0.25;
+        const pierceChance = Math.min(0.85, basePierceChance + Math.max(0, this.player.fragmentation - 1) * 0.10);
+        const spreadDeg = Math.min(150, 32 + impactSpeed * 0.05);
+        const baseAngle = Math.atan2(proj.vy, proj.vx);
+
+        // Flash detonation ring for visual clarity
+        this.blastEffects.push(new BlastEffect(proj.x, proj.y, 22, "#fb923c", 0.18));
+
+        for (let i = 0; i < fragCount; i++) {
+          const falloff = Math.pow(0.75, i); // each additional shard contributes less, but never zero
+          const fragDamage = Math.max(2, Math.round(hitDamage * 0.60 * falloff));
+          const offset = (Math.random() - 0.5) * (spreadDeg * Math.PI / 180);
+          const angle = baseAngle + offset;
+          const fragSpeed = Math.max(220, impactSpeed * 0.65);
+          
+          // Penetration roll: base 25%, scales with fragmentation
+          let shardPierce = 0;
+          if (Math.random() < pierceChance) {
+            shardPierce = 1;
+            if (pierceChance > 0.55 && Math.random() < pierceChance * 0.5) {
+              shardPierce = 2;
+            }
+          }
+
+          // Advance shard slightly along flight vector so it clears the struck entity hull
+          const spawnX = proj.x + Math.cos(angle) * 8;
+          const spawnY = proj.y + Math.sin(angle) * 8;
+
+          const shard = new Projectile(
+            spawnX,
+            spawnY,
+            Math.cos(angle) * fragSpeed,
+            Math.sin(angle) * fragSpeed,
+            4.5,
+            fragDamage,
+            shardPierce,
+            "#fb923c",
+            false,
+            0,
+            false,
+            0,
+            0,
+            340
+          );
+          shard.isFragment = true;
+          // Fragments don't re-hit the enemy they were born from on the same frame.
+          proj.hitEntities.forEach((e) => shard.hitEntities.add(e));
+          this.projectiles.push(shard);
+        }
+
+        logDebug(3, "Fragmentation shards spawned", { fragCount, pierceChance: pierceChance.toFixed(2), spreadDeg: spreadDeg.toFixed(0) });
+      }
+
+      /**
+       * Executes collision evaluations between all active entities.
+       *
+       * How to call:
+       *   this.checkCollisions();
+       *
+       * @returns {void}
+       */
+      checkCollisions() {
+        // 1. Player Projectiles vs Enemies
+        for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
+          const proj = this.projectiles[pIdx];
+          if (proj.isDestroyed) continue;
+
+          for (let eIdx = 0; eIdx < this.enemies.length; eIdx++) {
+            const enemy = this.enemies[eIdx];
+            if (enemy.isDestroyed || proj.hitEntities.has(enemy)) continue;
+
+            const dist = Math.hypot(proj.x - enemy.x, proj.y - enemy.y);
+            if (dist < proj.radius + enemy.radius) {
+              proj.hitEntities.add(enemy);
+
+              // Balatro Joker: Superposition — resolve the quantum pair the
+              // first time either twin lands a hit. This can destroy `proj`
+              // outright (the "fake" branch), so it must run before any
+              // damage/effects are applied.
+              if (proj.superpositionPairId && !proj.superpositionResolved) {
+                const twinRef = proj.twin;
+                proj.superpositionResolved = true;
+                if (twinRef) {
+                  twinRef.superpositionResolved = true;
+                  twinRef.superpositionPairId = null;
+                  twinRef.twin = null;
+                }
+                proj.superpositionPairId = null;
+                proj.twin = null;
+
+                const isReal = Math.random() < 0.5;
+                if (!isReal) {
+                  // The "fake" bullet collapses harmlessly. The twin (now
+                  // detached from superposition state above) carries on as
+                  // an ordinary projectile from this point forward.
+                  proj.isDestroyed = true;
+                  logDebug(3, "Superposition collapse: fake bullet fizzled", {});
+                  break;
+                } else if (twinRef) {
+                  // The "real" bullet deals damage; its twin fizzles out.
+                  twinRef.isDestroyed = true;
+                  logDebug(3, "Superposition collapse: real bullet confirmed, twin fizzled", {});
+                }
+              }
+
+              // Kinetic damage scales with impact speed. Regular shots get a
+              // mild bonus for exceeding baseline velocity (rewards the new
+              // Projectile Speed stat); the Snail Mail Joker gets a much
+              // steeper, exponential payoff since it's built entirely around
+              // building up speed before impact.
+              const impactSpeed = Math.hypot(proj.vx, proj.vy);
+              const speedRatio = impactSpeed / BASE_PROJECTILE_SPEED;
+              let effectiveDamage;
+              if (proj.hasSnailMail) {
+                effectiveDamage = Math.round(proj.damage * Math.pow(Math.max(speedRatio, 0.1), 1.8));
+              } else {
+                const speedBonus = Math.max(0, speedRatio - 1) * 0.4;
+                effectiveDamage = Math.round(proj.damage * (1 + speedBonus));
+              }
+              effectiveDamage = Math.max(1, effectiveDamage);
+
+              const isKilled = enemy.takeDamage(effectiveDamage);
+
+              // Floating damage text
+              this.floatingTexts.push(
+                new FloatingText(enemy.x, enemy.y - 12, `${effectiveDamage}`, proj.isCrit ? "#f59e0b" : "#ffffff", 0.6)
+              );
+
+              // Handle explosive rounds (Plasma Warhead)
+              if (proj.hasExplosion) {
+                this.blastEffects.push(new BlastEffect(enemy.x, enemy.y, proj.blastRadius, "#f59e0b", 0.3));
+                for (let otherIdx = 0; otherIdx < this.enemies.length; otherIdx++) {
+                  const splashTarget = this.enemies[otherIdx];
+                  if (splashTarget !== enemy && !splashTarget.isDestroyed) {
+                    const splashDist = Math.hypot(splashTarget.x - enemy.x, splashTarget.y - enemy.y);
+                    if (splashDist <= proj.blastRadius) {
+                      const splashDmg = Math.round(effectiveDamage * 0.7);
+                      const splashKilled = splashTarget.takeDamage(splashDmg);
+                      this.floatingTexts.push(
+                        new FloatingText(splashTarget.x, splashTarget.y - 10, `${splashDmg}`, "#f59e0b", 0.5)
+                      );
+                      if (splashKilled) {
+                        this.handleEnemyDefeat(splashTarget);
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Handle Chain Lightning
+              if (proj.chainRemaining > 0) {
+                let currentTarget = enemy;
+                while (proj.chainRemaining > 0) {
+                  let closestChainTarget = null;
+                  let minChainDist = this.player.chainRange;
+
+                  for (let cIdx = 0; cIdx < this.enemies.length; cIdx++) {
+                    const candidate = this.enemies[cIdx];
+                    if (!candidate.isDestroyed && !proj.hitEntities.has(candidate)) {
+                      const cDist = Math.hypot(candidate.x - currentTarget.x, candidate.y - currentTarget.y);
+                      if (cDist < minChainDist) {
+                        minChainDist = cDist;
+                        closestChainTarget = candidate;
+                      }
+                    }
+                  }
+
+                  if (closestChainTarget) {
+                    proj.hitEntities.add(closestChainTarget);
+                    proj.chainRemaining -= 1;
+                    this.lightningArcs.push(
+                      new LightningArc(currentTarget.x, currentTarget.y, closestChainTarget.x, closestChainTarget.y, "#a855f7", 0.22)
+                    );
+                    const chainDmg = Math.round(effectiveDamage * 0.75);
+                    const chainKilled = closestChainTarget.takeDamage(chainDmg);
+                    this.floatingTexts.push(
+                      new FloatingText(closestChainTarget.x, closestChainTarget.y - 12, `${chainDmg}`, "#a855f7", 0.5)
+                    );
+                    if (chainKilled) {
+                      this.handleEnemyDefeat(closestChainTarget);
+                    }
+                    currentTarget = closestChainTarget;
+                  } else {
+                    break;
+                  }
+                }
+              }
+
+              if (isKilled) {
+                this.handleEnemyDefeat(enemy);
+              }
+
+              // Check piercing
+              if (proj.pierceRemaining > 0) {
+                proj.pierceRemaining -= 1;
+                logDebug(3, "Projectile pierced through enemy", { remaining: proj.pierceRemaining });
+              } else {
+                proj.isDestroyed = true;
+
+                // Fragmentation: on the FINAL impact (after any piercing is
+                // used up), a projectile with fragmentation > 0 shatters into
+                // shrapnel shards. Fragments never fragment further.
+                if (!proj.isFragment && this.player.fragmentation > 0) {
+                  this.spawnFragments(proj, effectiveDamage, impactSpeed);
+                }
+              }
+
+              if (proj.isDestroyed) break;
+            }
+          }
+        }
+
+        // 2. Enemy Projectiles vs Player
+        for (let epIdx = 0; epIdx < this.enemyProjectiles.length; epIdx++) {
+          const bullet = this.enemyProjectiles[epIdx];
+          if (bullet.isDestroyed) continue;
+
+          const dist = Math.hypot(bullet.x - this.player.x, bullet.y - this.player.y);
+          if (dist < bullet.radius + this.player.radius) {
+            bullet.isDestroyed = true;
+            const damaged = this.player.takeDamage(bullet.damage);
+            if (damaged) {
+              this.floatingTexts.push(
+                new FloatingText(this.player.x, this.player.y - 14, `-${bullet.damage} HP`, "#ef4444", 0.7)
+              );
+              this.updateHUD();
+              if (this.player.health <= 0) {
+                this.triggerGameOver();
+                return;
+              }
+            }
+          }
+        }
+
+        // 3. Enemies colliding with Player
+        for (let eIdx = 0; eIdx < this.enemies.length; eIdx++) {
+          const enemy = this.enemies[eIdx];
+          if (enemy.isDestroyed) continue;
+
+          const dist = Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y);
+          if (dist < enemy.radius + this.player.radius) {
+            const hitDamage = enemy.isBoss ? 28 : 16;
+            const damaged = this.player.takeDamage(hitDamage);
+            if (damaged) {
+              this.floatingTexts.push(
+                new FloatingText(this.player.x, this.player.y - 14, `-${hitDamage} HP`, "#ef4444", 0.7)
+              );
+              this.updateHUD();
+              if (this.player.health <= 0) {
+                this.triggerGameOver();
+                return;
+              }
+            }
+          }
+        }
+
+        // 4. Player collecting Dropped Items (XP Squares and Boss Caches)
+        for (let iIdx = 0; iIdx < this.droppedItems.length; iIdx++) {
+          const item = this.droppedItems[iIdx];
+          if (item.isDestroyed) continue;
+
+          const dist = Math.hypot(item.x - this.player.x, item.y - this.player.y);
+          if (dist < item.size + this.player.radius + 6) {
+            item.isDestroyed = true;
+            this.currentXp += item.value;
+            this.totalScore += item.value * 25;
+
+            // Visual text popup
+            this.floatingTexts.push(
+              new FloatingText(
+                item.x,
+                item.y - 10,
+                item.isBossCache ? `+${item.value} BOSS CACHE` : `+${item.value} XP`,
+                item.isBossCache ? "#fbbf24" : "#34d399",
+                0.7
+              )
+            );
+
+            logDebug(2, "Item collected by player", {
+              itemValue: item.value,
+              currentXp: this.currentXp,
+              threshold: this.xpThreshold
+            });
+
+            this.updateHUD();
+
+            // Check if Level Up threshold reached - automatically pops up upgrade selection card overlay
+            if (this.currentXp >= this.xpThreshold) {
+              this.triggerLevelUp();
+              return;
+            }
+          }
+        }
+      }
+
+      /**
+       * Clean entity disposal: Iterates backwards through all entity arrays
+       * and splices out destroyed or out-of-bounds items cleanly without index skipping.
+       *
+       * How to call:
+       *   this.cleanDestroyedEntities();
+       *
+       * @returns {void}
+       */
+      cleanDestroyedEntities() {
+        // Player Projectiles
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+          const p = this.projectiles[i];
+          if (p.isDestroyed || p.isOutOfBounds(this.width, this.height)) {
+            this.projectiles.splice(i, 1);
+          }
+        }
+
+        // Enemy Projectiles
+        for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+          const ep = this.enemyProjectiles[i];
+          if (ep.isDestroyed || ep.isOutOfBounds(this.width, this.height)) {
+            this.enemyProjectiles.splice(i, 1);
+          }
+        }
+
+        // Enemies
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+          const e = this.enemies[i];
+          if (e.isDestroyed) {
+            if (e === this.activeBoss) {
+              this.activeBoss = null;
+            }
+            this.enemies.splice(i, 1);
+          }
+        }
+
+        // Dropped Items
+        for (let i = this.droppedItems.length - 1; i >= 0; i--) {
+          const item = this.droppedItems[i];
+          if (item.isDestroyed) {
+            this.droppedItems.splice(i, 1);
+          }
+        }
+
+        // Floating combat texts
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+          if (this.floatingTexts[i].isDestroyed) {
+            this.floatingTexts.splice(i, 1);
+          }
+        }
+
+        // Lightning arc visual effects
+        for (let i = this.lightningArcs.length - 1; i >= 0; i--) {
+          if (this.lightningArcs[i].isDestroyed) {
+            this.lightningArcs.splice(i, 1);
+          }
+        }
+
+        // Plasma blast visual effects
+        for (let i = this.blastEffects.length - 1; i >= 0; i--) {
+          if (this.blastEffects[i].isDestroyed) {
+            this.blastEffects.splice(i, 1);
+          }
+        }
+      }
+
+      /**
+       * Updates game entities according to elapsed frame delta time.
+       *
+       * How to call:
+       *   this.updateEntities(dt);
+       *
+       * @param {number} dt - Frame delta time in seconds.
+       * @returns {void}
+       */
+      updateEntities(dt) {
+        if (this.bossWarningTimer > 0) {
+          this.bossWarningTimer -= dt;
+          if (this.bossWarningTimer <= 0) {
+            this.bossWarningTimer = 0;
+            this.spawnBoss();
+          }
+        }
+
+        this.player.update(dt, this.activeKeys, this.width, this.height);
+
+        for (let i = 0; i < this.projectiles.length; i++) {
+          this.projectiles[i].update(dt, this.width, this.height);
+        }
+
+        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+          this.enemyProjectiles[i].update(dt);
+        }
+
+        for (let i = 0; i < this.enemies.length; i++) {
+          const enemy = this.enemies[i];
+          enemy.update(dt, this.player.x, this.player.y, this.enemyProjectiles);
+        }
+
+        for (let i = 0; i < this.droppedItems.length; i++) {
+          this.droppedItems[i].update(dt, this.player.x, this.player.y, this.player.magnetRadius);
+        }
+
+        for (let i = 0; i < this.floatingTexts.length; i++) {
+          this.floatingTexts[i].update(dt);
+        }
+
+        for (let i = 0; i < this.lightningArcs.length; i++) {
+          this.lightningArcs[i].update(dt);
+        }
+
+        for (let i = 0; i < this.blastEffects.length; i++) {
+          this.blastEffects[i].update(dt);
+        }
+      }
+
+      /**
+       * Refreshes DOM HUD telemetry elements.
+       *
+       * How to call:
+       *   this.updateHUD();
+       *
+       * @returns {void}
+       */
+      updateHUD() {
+        if (this.hudSector) {
+          const sectorNumber = String(Math.floor((this.playerLevel - 1) / 3) + 1).padStart(2, "0");
+          this.hudSector.textContent = `SECTOR-${sectorNumber}`;
+        }
+        if (this.hudScore) this.hudScore.textContent = this.totalScore.toString();
+        if (this.hudKills) this.hudKills.textContent = this.totalKills.toString();
+        if (this.hudHp) this.hudHp.textContent = `${this.player.health} / ${this.player.maxHealth}`;
+        if (this.hudLevel) this.hudLevel.textContent = this.playerLevel.toString();
+        if (this.hudXp) this.hudXp.textContent = `${this.currentXp} / ${this.xpThreshold}`;
+        if (this.hudRange) this.hudRange.textContent = `${Math.round(this.player.weaponRange)}px`;
+        if (this.hudUpgrades) {
+          const count = this.player.acquiredUpgrades ? this.player.acquiredUpgrades.length : 0;
+          this.hudUpgrades.textContent = count.toString();
+        }
+      }
+
+      /**
+       * Handles the moment a Balatro Joker card finishes its pickup burn
+       * animation. Reveals the (previously fully hidden, zero-footprint)
+       * joker rack above the HUD the FIRST time this ever happens — which
+       * slides the whole game area down via CSS transition on the rack's
+       * max-height/opacity/margin — then fills the next empty slot with a
+       * mini card that floats/hovers exactly like the level-up Joker cards,
+       * and wires up hover -> Balatro-style DOM tooltip.
+       *
+       * How to call:
+       *   this.onJokerAcquired(chosenJokerCard);
+       *
+       * @param {Object} card - The joker definition from UpgradeManager.jokerCatalog.
+       * @returns {void}
+       */
+      onJokerAcquired(card) {
+        if (!this.player.acquiredJokers) this.player.acquiredJokers = [];
+        this.player.acquiredJokers.push(card);
+
+        const rack = document.getElementById("balatro-joker-rack");
+        if (rack && !rack.classList.contains("joker-rack-active")) {
+          // First Joker ever acquired: reveal the rack. Up until this exact
+          // moment there has been zero DOM footprint or visual hint that
+          // this system exists at all.
+          rack.classList.add("joker-rack-active");
+          logDebug(1, "First Balatro Joker acquired — revealing joker rack (sliding game area down)", {});
+        }
+
+        const slotIndex = this.player.acquiredJokers.length - 1;
+        const slotEl = document.getElementById(`jokerSlot${slotIndex}`);
+        if (slotEl) {
+          slotEl.classList.remove("empty");
+          const variantClass = card.id === "joker_superposition" ? "superposition" : "";
+          slotEl.innerHTML = `
+            <div class="joker-mini-card ${variantClass}" data-joker-id="${card.id}">
+              <div class="joker-mini-corner top-left">J</div>
+              <canvas class="joker-mini-thumb" width="38" height="38"></canvas>
+              <div class="joker-mini-title">${card.title}</div>
+              <div class="joker-mini-corner bottom-right">J</div>
+            </div>
+          `;
+
+          const miniCanvas = slotEl.querySelector("canvas.joker-mini-thumb");
+          if (miniCanvas) {
+            drawJokerPixelArt(miniCanvas.getContext("2d"), card.id, 0, 0, 38, 38);
+          }
+
+          const cardEl = slotEl.querySelector(".joker-mini-card");
+          if (cardEl) {
+            cardEl.addEventListener("mouseenter", () => this.showJokerTooltip(card, cardEl));
+            cardEl.addEventListener("mouseleave", () => this.hideJokerTooltip());
+          }
+        }
+
+        const counterLabel = document.getElementById("jokerCountLabel");
+        if (counterLabel) counterLabel.textContent = `${this.player.acquiredJokers.length} / 5`;
+      }
+
+      /**
+       * Displays the floating Balatro-style DOM tooltip anchored beneath a
+       * hovered joker rack card, styled identically to the canvas tooltip
+       * used during the level-up card selection screen.
+       *
+       * How to call:
+       *   this.showJokerTooltip(card, cardEl);
+       *
+       * @param {Object} card - Joker definition (title, rarityTier, description).
+       * @param {HTMLElement} anchorEl - The .joker-mini-card element being hovered.
+       * @returns {void}
+       */
+      showJokerTooltip(card, anchorEl) {
+        const tooltip = document.getElementById("balatro-dom-tooltip");
+        const titleEl = document.getElementById("bTooltipTitle");
+        const descEl = document.getElementById("bTooltipDesc");
+        const rarityEl = document.getElementById("bTooltipRarity");
+        if (!tooltip || !titleEl || !descEl || !rarityEl) return;
+
+        titleEl.textContent = card.title;
+        descEl.textContent = card.description;
+        rarityEl.textContent = card.rarityTier;
+        rarityEl.className = `b-badge rarity-${card.rarityTier.toLowerCase()}`;
+
+        const rect = anchorEl.getBoundingClientRect();
+        const tooltipWidth = 260;
+        let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+        left = Math.max(8, Math.min(window.innerWidth - tooltipWidth - 8, left));
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${rect.bottom + 10}px`;
+
+        tooltip.classList.remove("balatro-tooltip-hidden");
+        tooltip.classList.add("visible");
+      }
+
+      /**
+       * Hides the DOM joker tooltip.
+       *
+       * How to call:
+       *   this.hideJokerTooltip();
+       *
+       * @returns {void}
+       */
+      hideJokerTooltip() {
+        const tooltip = document.getElementById("balatro-dom-tooltip");
+        if (tooltip) tooltip.classList.remove("visible");
+      }
+
+      /**
+       * Renders the geometric coordinate background grid and top XP bar.
+       *
+       * How to call:
+       *   this.renderArenaGrid();
+       *
+       * @returns {void}
+       */
+      renderArenaGrid() {
+        this.ctx.save();
+        this.ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
+        this.ctx.lineWidth = 1;
+
+        const cellSize = 40;
+        for (let x = 0; x <= this.width; x += cellSize) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, 0);
+          this.ctx.lineTo(x, this.height);
+          this.ctx.stroke();
+        }
+        for (let y = 0; y <= this.height; y += cellSize) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, y);
+          this.ctx.lineTo(this.width, y);
+          this.ctx.stroke();
+        }
+
+        // Sleek progressive XP indicator line along top edge
+        const xpRatio = Math.min(1.0, this.currentXp / this.xpThreshold);
+        this.ctx.fillStyle = "rgba(52, 211, 153, 0.85)";
+        this.ctx.shadowColor = "#34d399";
+        this.ctx.shadowBlur = 6;
+        this.ctx.fillRect(0, 0, this.width * xpRatio, 3);
+        this.ctx.shadowBlur = 0;
+
+        this.ctx.restore();
+      }
+
+      /**
+       * Draws dynamic targeting trajectory line to the nearest hostile target center.
+       *
+       * How to call:
+       *   this.renderAimGuide();
+       *
+       * @returns {void}
+       */
+      renderAimGuide() {
+        const target = this.findNearestEnemy(this.player.weaponRange);
+        if (target.enemy !== null) {
+          this.ctx.save();
+          this.ctx.beginPath();
+          this.ctx.setLineDash([4, 6]);
+          this.ctx.moveTo(this.player.x, this.player.y);
+          this.ctx.lineTo(target.enemy.x, target.enemy.y);
+          this.ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
+          this.ctx.lineWidth = 1.5;
+          this.ctx.stroke();
+
+          // Target reticle
+          this.ctx.beginPath();
+          this.ctx.arc(target.enemy.x, target.enemy.y, target.enemy.radius + 6, 0, Math.PI * 2);
+          this.ctx.strokeStyle = "rgba(251, 191, 36, 0.5)";
+          this.ctx.lineWidth = 1.5;
+          this.ctx.stroke();
+          this.ctx.restore();
+        }
+      }
+
+      /**
+       * Renders top boss health bar when a boss encounter is active.
+       *
+       * How to call:
+       *   this.renderBossTopBar();
+       *
+       * @returns {void}
+       */
+      renderBossTopBar() {
+        if (!this.activeBoss) return;
+
+        const barW = 380;
+        const barH = 10;
+        const barX = (this.width - barW) / 2;
+        const barY = 18;
+
+        this.ctx.save();
+        this.ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        this.ctx.textAlign = "center";
+        this.ctx.fillStyle = "#f43f5e";
+        this.ctx.fillText(this.activeBoss.name, this.width / 2, barY - 6);
+
+        this.ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+        this.ctx.fillRect(barX, barY, barW, barH);
+
+        const ratio = Math.max(0, this.activeBoss.health / this.activeBoss.maxHealth);
+        this.ctx.fillStyle = this.activeBoss.isEnraged ? "#ef4444" : "#ec4899";
+        this.ctx.fillRect(barX, barY, barW * ratio, barH);
+
+        this.ctx.strokeStyle = "#475569";
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(barX, barY, barW, barH);
+        this.ctx.restore();
+      }
+
+      /**
+       * Renders flashing boss warning banner.
+       *
+       * How to call:
+       *   this.renderBossWarning();
+       *
+       * @returns {void}
+       */
+      renderBossWarning() {
+        if (this.bossWarningTimer <= 0) return;
+
+        const flash = Math.sin(performance.now() * 0.015) > 0;
+        this.ctx.save();
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+
+        this.ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        this.ctx.fillStyle = flash ? "#ef4444" : "#f59e0b";
+        this.ctx.shadowColor = "#ef4444";
+        this.ctx.shadowBlur = 16;
+        this.ctx.fillText("WARNING: SECTOR TITAN APPROACHING", this.width / 2, 70);
+        this.ctx.restore();
+      }
+
+      /**
+       * Renders canvas overlays for READY and GAME_OVER states.
+       *
+       * How to call:
+       *   this.renderOverlays();
+       *
+       * @returns {void}
+       */
+      renderOverlays() {
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+
+        if (this.state === "READY") {
+          this.ctx.save();
+          this.ctx.fillStyle = "rgba(7, 10, 19, 0.85)";
+          this.ctx.fillRect(0, 0, this.width, this.height);
+
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+
+          this.ctx.font = "bold 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#ffffff";
+          this.ctx.fillText("CANVAS ARENA SURVIVOR", centerX, centerY - 45);
+
+          this.ctx.font = "14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#94a3b8";
+          this.ctx.fillText("Navigate with [W][A][S][D] & harvest dropped XP squares", centerX, centerY);
+
+          this.ctx.font = "13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#38bdf8";
+          this.ctx.fillText("Select Brotato-style upgrades on level-up and purge escalating Titans", centerX, centerY + 24);
+
+          this.ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#f1f5f9";
+          this.ctx.fillText("PRESS WASD OR CLICK TO ENGAGE", centerX, centerY + 70);
+
+          this.ctx.restore();
+        } else if (this.state === "GAME_OVER") {
+          this.ctx.save();
+          this.ctx.fillStyle = "rgba(7, 10, 19, 0.90)";
+          this.ctx.fillRect(0, 0, this.width, this.height);
+
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+
+          this.ctx.font = "bold 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#f43f5e";
+          this.ctx.shadowColor = "rgba(244, 63, 94, 0.5)";
+          this.ctx.shadowBlur = 18;
+          this.ctx.fillText("VESSEL DESTROYED", centerX, centerY - 45);
+
+          this.ctx.font = "15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#cbd5e1";
+          this.ctx.shadowBlur = 0;
+          this.ctx.fillText(`Final Score: ${this.totalScore}  |  Hostiles Purged: ${this.totalKills}  |  Level: ${this.playerLevel}`, centerX, centerY);
+
+          this.ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+          this.ctx.fillStyle = "#38bdf8";
+          this.ctx.fillText("CLICK CANVAS TO REINITIALIZE SIMULATION", centerX, centerY + 50);
+
+          this.ctx.restore();
+        }
+      }
+
+      /**
+       * The stable requestAnimationFrame game loop.
+       * Calculates elapsed delta time clamped to prevent simulation explosions.
+       *
+       * How to call:
+       *   this.gameLoop(timestamp);
+       *
+       * @param {DOMHighResTimeStamp} currentTimestamp - Frame timestamp.
+       * @returns {void}
+       */
+      gameLoop(currentTimestamp) {
+        let dt = (currentTimestamp - this.lastTimestamp) / 1000.0;
+        this.lastTimestamp = currentTimestamp;
+
+        // Clamp delta time to maximum 0.1s (10 FPS baseline)
+        if (dt > 0.1) {
+          dt = 0.1;
+        }
+
+        logDebug(4, "Game loop frame tick", { dt, state: this.state });
+
+        this.ctx.clearRect(0, 0, this.width, this.height);
+
+        // 1. Render Arena Background Grid and XP line
+        this.renderArenaGrid();
+
+        // 2. Active Simulation Update Branch
+        if (this.state === "PLAYING") {
+          this.spawnEnemies(dt);
+          this.handleAutoCombat(dt);
+          this.updateEntities(dt);
+          this.checkCollisions();
+          this.cleanDestroyedEntities();
+        }
+
+        // 3. Render Game Entities
+        for (let i = 0; i < this.droppedItems.length; i++) {
+          this.droppedItems[i].draw(this.ctx);
+        }
+
+        this.renderAimGuide();
+
+        for (let i = 0; i < this.projectiles.length; i++) {
+          this.projectiles[i].draw(this.ctx);
+        }
+
+        for (let i = 0; i < this.blastEffects.length; i++) {
+          this.blastEffects[i].draw(this.ctx);
+        }
+
+        for (let i = 0; i < this.lightningArcs.length; i++) {
+          this.lightningArcs[i].draw(this.ctx);
+        }
+
+        for (let i = 0; i < this.enemyProjectiles.length; i++) {
+          this.enemyProjectiles[i].draw(this.ctx);
+        }
+
+        for (let i = 0; i < this.enemies.length; i++) {
+          this.enemies[i].draw(this.ctx);
+        }
+
+        this.player.draw(this.ctx);
+
+        for (let i = 0; i < this.floatingTexts.length; i++) {
+          this.floatingTexts[i].draw(this.ctx);
+        }
+
+        this.renderBossTopBar();
+        this.renderBossWarning();
+
+        // 4. Render State Machine Overlays
+        try {
+          if (this.state === "LEVEL_UP") {
+            this.updateCardBurn(dt);
+            if (this.state === "LEVEL_UP") {
+              this.upgradeManager.drawOverlay(this.ctx, this.width, this.height, this.playerLevel, this.cardBurn.active ? this.cardBurn : null);
+            }
+          } else {
+            this.renderOverlays();
+          }
+        } catch (overlayErr) {
+          logDebug(0, "Error during overlay rendering", overlayErr);
+        }
+
+        // Schedule next frame
+        this.animationFrameId = requestAnimationFrame((ts) => this.gameLoop(ts));
+      }
+    }
+
+    /**
+     * Initializes the canvas application and verifies DOM ready state.
+     *
+     * How to call:
+     *   bootGame();
+     *
+     * @returns {void}
+     */
+
+    /* ===== src/js/05-boot.js ===== */
+function bootGame() {
+      const canvasElement = document.getElementById("gameCanvas");
+      if (canvasElement) {
+        const game = new GameManager(canvasElement);
+        game.init();
+        window.__arenaGameInstance = game;
+        logDebug(1, "Arena Survival Application v1.3.2 successfully bootstrapped.");
+      } else {
+        logDebug(0, "Failed to locate #gameCanvas element in DOM.");
+      }
+    }
+
+    if (document.readyState === "loading") {
+      window.addEventListener("DOMContentLoaded", bootGame);
+    } else {
+      bootGame();
+    }
+  </script>
+</body>
+</html>
