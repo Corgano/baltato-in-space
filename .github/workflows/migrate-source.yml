@@ -1,0 +1,71 @@
+name: Migrate game source tree
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !exists('src/template.html') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Split monolith into source files
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+          source = root / 'index.html'
+          text = source.read_text(encoding='utf-8')
+
+          style_match = re.search(r'<style>(.*?)</style>', text, re.S)
+          script_match = re.search(r'<script>(.*?)</script>', text, re.S)
+          body_match = re.search(r'<body>(.*?)</body>', text, re.S)
+          if not style_match or not script_match or not body_match:
+              raise SystemExit('Could not locate the single style/script/body blocks')
+
+          src = root / 'src'
+          js_dir = src / 'js'
+          js_dir.mkdir(parents=True, exist_ok=True)
+
+          (src / 'styles.css').write_text(style_match.group(1).strip() + '\n', encoding='utf-8')
+
+          js = script_match.group(1)
+          marker_re = re.compile(r'^\\s*/\\* ===== (src/js/[^ ]+\\.js) ===== \\*/\\s*$', re.M)
+          markers = list(marker_re.finditer(js))
+
+          if not markers:
+              (js_dir / '00-game.js').write_text(js.strip() + '\n', encoding='utf-8')
+          else:
+              preamble = js[:markers[0].start()].strip()
+              if preamble:
+                  (js_dir / '00-core.js').write_text(preamble + '\n', encoding='utf-8')
+              for i, marker in enumerate(markers):
+                  filename = marker.group(1).split('/')[-1]
+                  start = marker.end()
+                  end = markers[i + 1].start() if i + 1 < len(markers) else len(js)
+                  content = js[start:end].strip()
+                  if content:
+                      (js_dir / filename).write_text(content + '\n', encoding='utf-8')
+
+          template = text[:style_match.start()] + '<style>\\n<!-- BUILD:STYLES -->\\n  </style>' + text[style_match.end():]
+          template = template.replace(script_match.group(0), '<script>\\n    <!-- BUILD:SCRIPT -->\\n  </script>')
+          (src / 'template.html').write_text(template, encoding='utf-8')
+          PY
+
+          python3 tools/build.py
+
+          rm -f index.html
+          rm -rf debug_source
+          rm -f .github/workflows/inspect.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src dist tools .github/workflows/migrate-source.yml .github/workflows/inspect.yml index.html debug_source
+          git commit -m "Split game into source tree and build dist"
+          git push
