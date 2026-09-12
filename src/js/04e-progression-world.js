@@ -42,6 +42,45 @@ GameManager.prototype.updateCamera = function() {
   );
 };
 
+// P-1: Initialize the player and camera together after all world-size layers
+// have been installed. This prevents the first rendered frame from inheriting
+// the old viewport origin and briefly placing the player at a map corner.
+const balttatoOriginalInitProgressionWorld = GameManager.prototype.init;
+GameManager.prototype.init = function() {
+  balttatoOriginalInitProgressionWorld.call(this);
+  balttatoUpdateWorldDimensions(this);
+  this.player.x = this.worldWidth / 2;
+  this.player.y = this.worldHeight / 2;
+  this.updateCamera();
+  logDebug(1, "World start position initialized", {
+    worldWidth: this.worldWidth,
+    worldHeight: this.worldHeight,
+    playerX: this.player.x,
+    playerY: this.player.y,
+    cameraX: this.cameraX,
+    cameraY: this.cameraY
+  });
+};
+
+// P-1: Reset the player and camera to the center of the current world when a
+// run restarts, rather than relying on the viewport-sized reset coordinates.
+const balttatoOriginalRestartGameProgressionWorld = GameManager.prototype.restartGame;
+GameManager.prototype.restartGame = function() {
+  balttatoOriginalRestartGameProgressionWorld.call(this);
+  balttatoUpdateWorldDimensions(this);
+  this.player.x = this.worldWidth / 2;
+  this.player.y = this.worldHeight / 2;
+  this.updateCamera();
+  logDebug(1, "World start position reset", {
+    worldWidth: this.worldWidth,
+    worldHeight: this.worldHeight,
+    playerX: this.player.x,
+    playerY: this.player.y,
+    cameraX: this.cameraX,
+    cameraY: this.cameraY
+  });
+};
+
 // P-1: Harder enemies award XP in proportion to their health while retaining
 // the existing archetype minimums so early-game rewards do not regress.
 const balttatoOriginalHandleEnemyDefeatProgression = GameManager.prototype.handleEnemyDefeat;
