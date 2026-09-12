@@ -7,6 +7,15 @@
 const BALTTATO_WORLD_WIDTH = 3200;
 const BALTTATO_WORLD_HEIGHT = 2400;
 const BALTTATO_CAMERA_MARGIN = 10;
+const BALTTATO_CAMERA_ZOOM = 0.8;
+const BALTTATO_SPAWN_START_COUNT = 3;
+const BALTTATO_SPAWN_COUNT_GROWTH_SECONDS = 20;
+const BALTTATO_SPAWN_COUNT_STEP = 1;
+const BALTTATO_SPAWN_COUNT_CAP = 24;
+const BALTTATO_SWARMER_CLUSTER_CAP = 8;
+const BALTTATO_SWARMER_SPREAD_BASE = 35;
+const BALTTATO_SWARMER_SPREAD_GROWTH = 2.5;
+const BALTTATO_SWARMER_SPREAD_CAP = 220;
 
 const balttatoOriginalProjectileUpdate = Projectile.prototype.update;
 Projectile.prototype.update = function(dt, arenaWidth = 800, arenaHeight = 600) {
@@ -150,10 +159,11 @@ const balttatoOriginalInit = GameManager.prototype.init;
 GameManager.prototype.init = function() {
   this.worldWidth = BALTTATO_WORLD_WIDTH;
   this.worldHeight = BALTTATO_WORLD_HEIGHT;
-  this.cameraX = this.worldWidth / 2 - this.width / 2;
-  this.cameraY = this.worldHeight / 2 - this.height / 2;
+  this.cameraX = this.worldWidth / 2 - this.width / (2 * BALTTATO_CAMERA_ZOOM);
+  this.cameraY = this.worldHeight / 2 - this.height / (2 * BALTTATO_CAMERA_ZOOM);
   this.player.x = this.worldWidth / 2;
   this.player.y = this.worldHeight / 2;
+  this.spawnDirectorTimer = 0;
   balttatoOriginalInit.call(this);
 };
 
@@ -162,8 +172,9 @@ GameManager.prototype.restartGame = function() {
   balttatoOriginalRestartGame.call(this);
   this.player.x = this.worldWidth / 2;
   this.player.y = this.worldHeight / 2;
-  this.cameraX = this.worldWidth / 2 - this.width / 2;
-  this.cameraY = this.worldHeight / 2 - this.height / 2;
+  this.cameraX = this.worldWidth / 2 - this.width / (2 * BALTTATO_CAMERA_ZOOM);
+  this.cameraY = this.worldHeight / 2 - this.height / (2 * BALTTATO_CAMERA_ZOOM);
+  this.spawnDirectorTimer = 0;
 };
 
 const balttatoOriginalUpdateEntities = GameManager.prototype.updateEntities;
@@ -180,16 +191,18 @@ GameManager.prototype.updateEntities = function(dt) {
 GameManager.prototype.updateCamera = function() {
   const worldWidth = this.worldWidth || BALTTATO_WORLD_WIDTH;
   const worldHeight = this.worldHeight || BALTTATO_WORLD_HEIGHT;
-  const maxCameraX = worldWidth - this.width + BALTTATO_CAMERA_MARGIN;
-  const maxCameraY = worldHeight - this.height + BALTTATO_CAMERA_MARGIN;
+  const visibleWorldWidth = this.width / BALTTATO_CAMERA_ZOOM;
+  const visibleWorldHeight = this.height / BALTTATO_CAMERA_ZOOM;
+  const maxCameraX = worldWidth - visibleWorldWidth + BALTTATO_CAMERA_MARGIN;
+  const maxCameraY = worldHeight - visibleWorldHeight + BALTTATO_CAMERA_MARGIN;
 
   this.cameraX = Math.max(
     -BALTTATO_CAMERA_MARGIN,
-    Math.min(maxCameraX, this.player.x - this.width / 2)
+    Math.min(maxCameraX, this.player.x - visibleWorldWidth / 2)
   );
   this.cameraY = Math.max(
     -BALTTATO_CAMERA_MARGIN,
-    Math.min(maxCameraY, this.player.y - this.height / 2)
+    Math.min(maxCameraY, this.player.y - visibleWorldHeight / 2)
   );
 };
 
@@ -284,7 +297,8 @@ GameManager.prototype.gameLoop = function(currentTimestamp) {
   this.ctx.clearRect(0, 0, this.width, this.height);
 
   this.ctx.save();
-  this.ctx.translate(-this.cameraX, -this.cameraY);
+  this.ctx.translate(-this.cameraX * BALTTATO_CAMERA_ZOOM, -this.cameraY * BALTTATO_CAMERA_ZOOM);
+  this.ctx.scale(BALTTATO_CAMERA_ZOOM, BALTTATO_CAMERA_ZOOM);
   this.renderWorldArenaGrid();
   this.ctx.restore();
 
@@ -298,7 +312,8 @@ GameManager.prototype.gameLoop = function(currentTimestamp) {
   }
 
   this.ctx.save();
-  this.ctx.translate(-this.cameraX, -this.cameraY);
+  this.ctx.translate(-this.cameraX * BALTTATO_CAMERA_ZOOM, -this.cameraY * BALTTATO_CAMERA_ZOOM);
+  this.ctx.scale(BALTTATO_CAMERA_ZOOM, BALTTATO_CAMERA_ZOOM);
 
   for (let i = 0; i < this.droppedItems.length; i++) {
     this.droppedItems[i].draw(this.ctx);
@@ -753,4 +768,91 @@ GameManager.prototype.rerollOfferings = function() {
 const balttatoOriginalSelectUpgradeByIndexProgression = GameManager.prototype.selectUpgradeByIndex;
 GameManager.prototype.selectUpgradeByIndex = function(index) {
   return balttatoOriginalSelectUpgradeByIndexProgression.call(this, index);
+};
+
+/* TODO 17-18: zoom the camera out so the playing field shows more action at once,
+ * and progressively direct more numerous, wider-spread enemy clusters. */
+
+const balttatoOriginalSpawnEnemiesDirector = GameManager.prototype.spawnEnemies;
+GameManager.prototype.spawnEnemies = function(dt) {
+  this.spawnDirectorTimer = (this.spawnDirectorTimer || 0) + dt;
+
+  const currentInterval = this.activeBoss ? this.spawnInterval * 2.2 : this.spawnInterval;
+  if (this.spawnDirectorTimer < currentInterval) return;
+
+  this.spawnDirectorTimer -= currentInterval;
+
+  const elapsed = this.spawnDirectorElapsed || 0;
+  const targetCount = Math.min(
+    BALTTATO_SPAWN_COUNT_CAP,
+    BALTTATO_SPAWN_START_COUNT + Math.floor(elapsed / BALTTATO_SPAWN_COUNT_GROWTH_SECONDS) * BALTTATO_SPAWN_COUNT_STEP
+  );
+
+  let normalEnemyCount = 0;
+  for (let i = 0; i < this.enemies.length; i++) {
+    const enemy = this.enemies[i];
+    if (!enemy.isDestroyed && !enemy.isBoss) normalEnemyCount += 1;
+  }
+
+  if (normalEnemyCount >= targetCount) return;
+
+  this.spawnTimer = 0;
+  const beforeCount = this.enemies.length;
+  balttatoOriginalSpawnEnemiesDirector.call(this, currentInterval);
+
+  const spawned = this.enemies.slice(beforeCount);
+  const swarmers = spawned.filter((enemy) => !enemy.isDestroyed && enemy.enemyType === "swarmer");
+
+  if (swarmers.length > 0) {
+    const baseX = swarmers.reduce((sum, enemy) => sum + enemy.x, 0) / swarmers.length;
+    const baseY = swarmers.reduce((sum, enemy) => sum + enemy.y, 0) / swarmers.length;
+    const clusterSize = Math.min(
+      BALTTATO_SWARMER_CLUSTER_CAP,
+      2 + Math.floor(elapsed / 30)
+    );
+    const spread = Math.min(
+      BALTTATO_SWARMER_SPREAD_CAP,
+      BALTTATO_SWARMER_SPREAD_BASE + elapsed * BALTTATO_SWARMER_SPREAD_GROWTH
+    );
+
+    for (let i = 0; i < swarmers.length; i++) {
+      swarmers[i].x = baseX + (Math.random() - 0.5) * spread;
+      swarmers[i].y = baseY + (Math.random() - 0.5) * spread;
+    }
+
+    const roomForCluster = Math.max(0, targetCount - normalEnemyCount - swarmers.length);
+    const additionalCount = Math.min(clusterSize - swarmers.length, roomForCluster);
+    for (let i = 0; i < additionalCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * spread * 0.5;
+      const swarmerSpeed = this.enemySpeedBase * 1.5 + (Math.random() - 0.5) * 20;
+      const swarmerHp = 14 + this.playerLevel * 3;
+      const swarmer = new Enemy(
+        baseX + Math.cos(angle) * distance,
+        baseY + Math.sin(angle) * distance,
+        8,
+        swarmerSpeed,
+        swarmerHp,
+        "#ec4899",
+        "swarmer"
+      );
+      this.enemies.push(swarmer);
+    }
+
+    logDebug(3, "Progressive swarmer cluster spawned", {
+      count: swarmers.length + additionalCount,
+      targetCount,
+      spread,
+      elapsed
+    });
+  }
+
+  this.spawnDirectorElapsed = elapsed + currentInterval;
+};
+
+const balttatoOriginalRestartGameDirector = GameManager.prototype.restartGame;
+GameManager.prototype.restartGame = function() {
+  balttatoOriginalRestartGameDirector.call(this);
+  this.spawnDirectorTimer = 0;
+  this.spawnDirectorElapsed = 0;
 };
