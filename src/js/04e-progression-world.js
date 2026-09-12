@@ -63,20 +63,11 @@ GameManager.prototype.handleEnemyDefeat = function(enemy) {
 
   for (let i = 0; i < interceptedItems.length; i++) {
     const item = interceptedItems[i];
-    if (item && !item.isBossCache && !item.isLuckyDrop) {
-      const healthScaledXp = Math.round(Math.max(item.value, enemy.maxHealth * 0.30));
-      item.value = healthScaledXp;
+    if (item && !item.isBossCache) {
+      item.value = Math.max(item.value, Math.round(enemy.maxHealth * 0.30));
     }
     originalDroppedItems.push(item);
   }
-};
-
-// P-1: Bosses drop a large cache worth roughly 85% of the XP needed for the
-// next level, making a boss kill a meaningful progression event without always
-// forcing an immediate level-up by itself.
-const balttatoOriginalHandleBossDefeatProgression = GameManager.prototype.handleEnemyDefeat;
-GameManager.prototype.handleBossDefeatProgression = function(enemy) {
-  balttatoOriginalHandleBossDefeatProgression.call(this, enemy);
 };
 
 // P-1: Tune the XP curve so upgrade choices occur more often while still
@@ -93,8 +84,10 @@ GameManager.prototype.calculateXpThreshold = function(level) {
   return base + linear + quadratic;
 };
 
-// Replace the core defeat handler once more so boss cache sizing can use the
-// newly tuned threshold while preserving the original score/drop behavior.
+// P-1: Bosses drop a large cache worth roughly 85% of the XP needed for the
+// next level, making a boss kill a meaningful progression event without always
+// forcing an immediate level-up by itself.
+const balttatoOriginalHandleEnemyDefeatWithBossCache = GameManager.prototype.handleEnemyDefeat;
 GameManager.prototype.handleEnemyDefeat = function(enemy) {
   const originalDroppedItems = this.droppedItems;
   const originalPush = originalDroppedItems.push.bind(originalDroppedItems);
@@ -106,7 +99,7 @@ GameManager.prototype.handleEnemyDefeat = function(enemy) {
   };
 
   try {
-    balttatoOriginalHandleBossDefeatProgression.call(this, enemy);
+    balttatoOriginalHandleEnemyDefeatWithBossCache.call(this, enemy);
   } finally {
     originalDroppedItems.push = originalPush;
   }
@@ -115,8 +108,6 @@ GameManager.prototype.handleEnemyDefeat = function(enemy) {
     const item = interceptedItems[i];
     if (enemy.isBoss && item && item.isBossCache) {
       item.value = Math.max(1, Math.round(this.calculateXpThreshold(this.playerLevel) * 0.85));
-    } else if (!enemy.isBoss && item && !item.isLuckyDrop) {
-      item.value = Math.max(item.value, Math.round(enemy.maxHealth * 0.30));
     }
     originalDroppedItems.push(item);
   }
@@ -126,11 +117,8 @@ GameManager.prototype.handleEnemyDefeat = function(enemy) {
 const balttatoOriginalFinalizeCardSelectionProgression = GameManager.prototype.finalizeCardSelection;
 GameManager.prototype.finalizeCardSelection = function(index) {
   const originalTriggerBossWarning = this.triggerBossWarning;
-  let bossWarningTriggered = false;
 
-  this.triggerBossWarning = () => {
-    bossWarningTriggered = true;
-  };
+  this.triggerBossWarning = () => {};
 
   try {
     balttatoOriginalFinalizeCardSelectionProgression.call(this, index);
@@ -138,12 +126,9 @@ GameManager.prototype.finalizeCardSelection = function(index) {
     this.triggerBossWarning = originalTriggerBossWarning;
   }
 
-  if (bossWarningTriggered) {
-    if (this.playerLevel % 5 === 0 && !this.activeBoss) {
-      this.triggerBossWarning();
-    } else {
-      this.bossWarningTimer = 0;
-    }
+  this.bossWarningTimer = 0;
+  if (this.playerLevel % 5 === 0 && !this.activeBoss) {
+    this.triggerBossWarning();
   }
 };
 
