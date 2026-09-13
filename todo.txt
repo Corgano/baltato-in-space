@@ -14,7 +14,7 @@ P-1 - New features to sort
 - [DONE] bosses should drop a big chunk of exp, nearly a levels worth. 
 - [DONE] decrease the amount of exp per level and the level exp scaling so they happen more often, have boss spawns  every 5 levels instead
 - [DONE] randomize the location a boss spawns on screen ex which side they come in on
-- upgrades should be reworked. The upgrade should increase a relevant stat - luck, fragmentation, penetration, speed, movement, etc - and then the behaviours should be based off that speed. The individual upgrades should say waht stats they effect, and then the pause game screen should show a list of the player stats, and hovering over them should have a tooltip for the effects those stats do.
+- [ ] Confirm the stat-driven upgrade design is fully applied: upgrades should increase relevant stats - luck, fragmentation, penetration, speed, movement, etc - and then behaviours should be based off those stats. Individual upgrades should state which stats they affect, and the pause game screen should show player stats with hover tooltips explaining each stat's effects.
 - chance of joker spawnning should increase with luck stat
 - jokers collected, should be able to be sold from the joker tray (once the tray exists after getting the first joker). They should be able to bbe scrapped for rerol tokens.
 
@@ -22,7 +22,7 @@ P0 — Critical gameplay fixes
 1. [DONE] Fix high-speed projectile tunneling: use swept collision / equivalent continuous collision detection so fast projectiles cannot skip over small enemies between frames.
 2. [DONE] Fix collision-enemy interactions: small enemies that damage the player by contact must remain hittable while overlapping the player, and a successful contact attack must also destroy the attacking enemy.
 3. [DONE] Add a proper pause screen toggled by ESC. Pausing must stop gameplay simulation and display the player's current run statistics.
-4. [DONE] Expand the playable field and camera system: the world should be 4x the canvas area, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 15 px beyond the field.
+4. [DONE] Expand the playable field and camera system: the world should be 1.5x the canvas area at level 1, grow by about 1% of the canvas per level, the camera should follow the player while keeping them near screen center, and camera panning should be constrained at world edges so the view never exposes more than 20 px beyond the field.
 
 P1 — Core gameplay systems
 5. [DONE] Add a player boost system and Boost upgrade:
