@@ -32,8 +32,6 @@ function balttatoApplyStatSafety(player) {
     const value = balttatoStatFinite(player[key], 0);
     if (key === "fireInterval") {
       player[key] = Math.max(limits[key], value);
-    } else if (key === "critMultiplier" || key === "damage" || key === "maxHealth" || key === "armor" || key === "speed" || key === "luck") {
-      player[key] = Math.min(limits[key], Math.max(0, value));
     } else {
       player[key] = Math.min(limits[key], Math.max(0, value));
     }
@@ -42,13 +40,51 @@ function balttatoApplyStatSafety(player) {
   player.critChance = Math.min(0.95, Math.max(0, balttatoStatFinite(player.critChance, 0.08)));
 }
 
+function balttatoApplyEntitySafety(game) {
+  const budgets = {
+    projectiles: 300,
+    enemyProjectiles: 200,
+    enemies: 150,
+    blastEffects: 48,
+    lightningArcs: 150,
+    floatingTexts: 250,
+    droppedItems: 500
+  };
+
+  for (const key of Object.keys(budgets)) {
+    const array = game[key];
+    if (!Array.isArray(array) || array.length <= budgets[key]) continue;
+
+    const excess = array.length - budgets[key];
+    if (key === "enemies") {
+      let removed = 0;
+      for (let i = 0; i < array.length && removed < excess; i++) {
+        if (!array[i].isBoss && !array[i].isDestroyed) {
+          array[i].isDestroyed = true;
+          removed += 1;
+        }
+      }
+    } else if (key === "projectiles" || key === "enemyProjectiles" || key === "blastEffects" || key === "lightningArcs" || key === "floatingTexts") {
+      for (let i = 0; i < excess; i++) {
+        if (array[i]) array[i].isDestroyed = true;
+      }
+    } else {
+      array.splice(0, excess);
+    }
+
+    logDebug(1, "Entity safety budget applied", {
+      collection: key,
+      count: array.length,
+      budget: budgets[key]
+    });
+  }
+}
+
 const balttatoOriginalAutoCombatStatSafety = GameManager.prototype.handleAutoCombat;
 GameManager.prototype.handleAutoCombat = function(dt) {
   balttatoApplyStatSafety(this.player);
-
-  // Stop projectile multiplication from consuming the browser event loop.
+  balttatoApplyEntitySafety(this);
   if (this.projectiles.length >= 300) return;
-
   balttatoOriginalAutoCombatStatSafety.call(this, dt);
 };
 
@@ -56,12 +92,14 @@ const balttatoOriginalUpdateEntitiesStatSafety = GameManager.prototype.updateEnt
 GameManager.prototype.updateEntities = function(dt) {
   balttatoApplyStatSafety(this.player);
   balttatoOriginalUpdateEntitiesStatSafety.call(this, dt);
+  balttatoApplyEntitySafety(this);
 };
 
 const balttatoOriginalCheckCollisionsStatSafety = GameManager.prototype.checkCollisions;
 GameManager.prototype.checkCollisions = function() {
   balttatoApplyStatSafety(this.player);
   balttatoOriginalCheckCollisionsStatSafety.call(this);
+  balttatoApplyEntitySafety(this);
 };
 
 const balttatoOriginalFinalizeStatSafety = GameManager.prototype.finalizeCardSelection;
@@ -70,24 +108,20 @@ GameManager.prototype.finalizeCardSelection = function(index) {
   balttatoApplyStatSafety(this.player);
 };
 
-// Keep chained visual effects bounded. Their probabilities still scale from
-// Luck and upgrade ranks, but a single frame cannot create an unbounded tree.
 const balttatoOriginalCreateChainEffectStatSafety = balttatoCreateChainExplosion;
 balttatoCreateChainExplosion = function(game, x, y, damage, depth) {
   if (depth > 5 || game.blastEffects.length >= 48) return;
   balttatoOriginalCreateChainEffectStatSafety(game, x, y, damage, depth);
 };
 
-// Large stat values are useful as progression records, but collision work must
-// remain bounded. The gameplay layer reads these same effective values.
 const balttatoOriginalProcessWaveStatSafety = balttatoProcessBlastWave;
 balttatoProcessBlastWave = function(game, blast, dt) {
-  if (game.enemies.length > 250) return;
+  if (game.enemies.length > 150) return;
   balttatoOriginalProcessWaveStatSafety(game, blast, dt);
 };
 
-// Replace verbose upgrade descriptions with a large, readable stat-delta block.
-// Scaling/cap information stays in the pause-screen tooltips.
+// Cards show only the affected stat and this rank's gain. Scaling/cap details
+// are intentionally kept off the card face.
 const balttatoOriginalDrawStatsOnly = UpgradeManager.prototype.drawOverlay;
 UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
   const savedDescriptions = [];
@@ -134,12 +168,30 @@ UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLev
   }
 };
 
+// Put implementation details in the pause-screen hover text, not on cards.
+for (let i = 0; i < BALTTATO_STAT_DEFINITIONS.length; i++) {
+  const definition = BALTTATO_STAT_DEFINITIONS[i];
+  const relatedIds = [];
+  for (const id of Object.keys(BALTTATO_UPGRADE_SCALING)) {
+    const config = BALTTATO_UPGRADE_SCALING[id];
+    if (config.effects.some((effect) => effect.key === definition.key)) relatedIds.push(id);
+  }
+  if (relatedIds.length > 0) {
+    const details = relatedIds.map((id) => BALTTATO_UPGRADE_SCALING[id].tooltip).join(" ");
+    definition.tooltip = `${definition.tooltip} ${details}`;
+  }
+}
+
 logDebug(1, "Stat rewrite safety layer enabled", {
   projectileBudget: 300,
+  enemyProjectileBudget: 200,
+  enemyBudget: 150,
   activeChainDepth: 5,
   activeBlastBudget: 48,
   maxMultishot: 24,
   maxFragmentation: 12,
   maxPenetration: 16,
-  maxChainLinks: 12
+  maxChainLinks: 12,
+  maxRicochet: 20,
+  maxProjectileSpeed: 5000
 });
