@@ -122,7 +122,7 @@ balttatoProcessBlastWave = function(game, blast, dt) {
 
 // Cards show only the affected stat and this rank's gain. Scaling/cap details
 // are intentionally kept off the card face.
-const balttatoOriginalDrawStatsOnly = UpgradeManager.prototype.drawOverlay;
+const balttatoOriginalDrawStatsOnly = balttatoOriginalUpgradeManagerClass.prototype.drawOverlay;
 UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLevel, burnInfo = null) {
   const savedDescriptions = [];
   const statLines = [];
