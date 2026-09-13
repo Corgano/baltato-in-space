@@ -7,22 +7,8 @@
 const BALTTATO_UPGRADE_SCALING = {
   nanite_siphon: {
     effects: [
-      {
-        stat: "Life Leech",
-        key: "lifeLeechChance",
-        mode: "exponential",
-        base: 0.15,
-        cap: 0.85,
-        rate: 0.62,
-        minimum: 0.005
-      },
-      {
-        stat: "Siphon Amount",
-        key: "lifeLeechAmount",
-        mode: "linear",
-        amount: 1,
-        minimum: 1
-      }
+      { stat: "Life Leech", key: "lifeLeechChance", mode: "exponential", base: 0.15, cap: 0.85, rate: 0.62, minimum: 0.005 },
+      { stat: "Siphon Amount", key: "lifeLeechAmount", mode: "linear", amount: 1, minimum: 1 }
     ],
     tooltip: "Chance follows a diminishing-returns curve toward 85%. Each rank also adds 1 hull to the siphoned amount, so ranks remain useful after the chance approaches its cap."
   },
@@ -121,9 +107,6 @@ function balttatoInstallInfiniteUpgradeScaling() {
 
 balttatoInstallInfiniteUpgradeScaling();
 
-// The existing card layer reads this function when it appends stat text. Keep
-// the card face concise: the affected stat and its current-rank gain belong on
-// the card; scaling rules belong in the pause-screen stat tooltip.
 balttatoFormatUpgradeStats = function(upgrade) {
   const config = BALTTATO_UPGRADE_SCALING[upgrade.id];
   if (!config) return upgrade.statEffects && upgrade.statEffects.length > 0 ? upgrade.statEffects.join(" | ") : "";
@@ -135,10 +118,32 @@ balttatoFormatUpgradeStats = function(upgrade) {
   }).join(" | ");
 };
 
-// Expose the scaling rules to the pause screen without changing the existing
-// stat table structure. Hover text can be expanded by the stat presentation
-// layer without putting implementation details onto upgrade cards.
 window.BALTTATO_UPGRADE_SCALING = BALTTATO_UPGRADE_SCALING;
+
+// The original defeat handler owns XP, scoring, drops, and destruction. Temporarily
+// suppress its legacy fixed siphon roll, then perform the configured stat-based roll.
+const balttatoOriginalHandleEnemyDefeatInfiniteScaling = GameManager.prototype.handleEnemyDefeat;
+GameManager.prototype.handleEnemyDefeat = function(enemy) {
+  const player = this.player;
+  const configuredChance = Number(player.lifeLeechChance) || 0;
+  const configuredAmount = Math.max(1, Number(player.lifeLeechAmount) || 8);
+  player.lifeLeechChance = 0;
+
+  try {
+    balttatoOriginalHandleEnemyDefeatInfiniteScaling.call(this, enemy);
+  } finally {
+    player.lifeLeechChance = Math.min(0.85, Math.max(0, configuredChance));
+  }
+
+  if (configuredChance > 0 && Math.random() < configuredChance) {
+    player.heal(configuredAmount);
+    logDebug(2, "Nanite Siphon restored hull", {
+      chance: configuredChance,
+      amount: configuredAmount,
+      hull: player.health
+    });
+  }
+};
 
 logDebug(1, "Nanite Siphon now scales beyond five ranks", {
   probabilityCap: 0.85,
