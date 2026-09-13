@@ -31,26 +31,9 @@ const BALTTATO_JOKER_RENDER_SCALE = 3;
 const BALTTATO_JOKER_WIDTH = BALTTATO_JOKER_BASE_WIDTH * BALTTATO_JOKER_RENDER_SCALE;
 const BALTTATO_JOKER_HEIGHT = BALTTATO_JOKER_BASE_HEIGHT * BALTTATO_JOKER_RENDER_SCALE;
 
-const balttatoOriginalUpgradeCardLayout = UpgradeManager.prototype.getCardLayout;
-UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
-      const cardW = BALTTATO_JOKER_WIDTH;
-      const cardH = BALTTATO_JOKER_HEIGHT;
-      const gap = 20;
-      const totalW = cardW * 3 + gap * 2;
-      const startX = (canvasW - totalW) / 2;
-      const startY = canvasH / 2 - cardH / 2;
-
-      const rects = [];
-      for (let i = 0; i < 3; i++) {
-        rects.push({
-          x: startX + i * (cardW + gap),
-          y: startY,
-          w: cardW,
-          h: cardH
-        });
-      }
-      return rects;
-    };
+// 04g-card-layout.js owns upgrade-card sizing and uses the active card count,
+// including the Luck-based fourth choice. Do not override it here with a fixed
+// three-card layout, or a fourth offering cannot be rendered correctly.
 
 // Slow the Joker idle motion slightly and reduce its vertical float amplitude.
 // The original renderer uses Date.now() for both the idle motion and burn effect;
