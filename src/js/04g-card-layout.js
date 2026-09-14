@@ -97,12 +97,17 @@ UpgradeManager.prototype.generateOfferings = function(forceJoker = false) {
     hypervelocity_cores: "Stats: Projectile Speed +35%\nRange +18% scaling",
     lucky_charm: "Stats: Luck +1",
     shrapnel_casing: "Stats: Fragmentation +2",
-    cluster_munitions: "Stats: Fragmentation +3\nProjectile Speed +15%"
+    cluster_munitions: "Stats: Fragmentation +3\nProjectile Speed +15%",
+    boost_capacity: "Stats: Boost Capacity +50\nFully recharge Boost"
   };
 
   for (const card of cards) {
-    if (!card.isJoker && statText[card.id]) {
-      card.description = statText[card.id];
+    if (!card.isJoker) {
+      if (statText[card.id]) {
+        card.description = statText[card.id];
+      } else if (typeof card.description === "string" && card.description.includes("Stats:")) {
+        card.description = card.description.replace(/\s*\|\s*/g, "\n");
+      }
     }
   }
 
