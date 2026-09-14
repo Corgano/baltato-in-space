@@ -6,17 +6,17 @@
 
 const BALTTATO_RUN_STATE_COOKIE = "balttato_run_state";
 const BALTTATO_RUN_STATE_MAX_AGE = 60 * 60 * 24 * 7;
-const BALTTATO_EXTRA_CHOICE_CAP = 0.50;
-const BALTTATO_EXTRA_CHOICE_LUCK_CURVE = 0.20;
 const BALTTATO_SUPERPOSITION_INITIAL_OFFSET = 7.5;
 const BALTTATO_SUPERPOSITION_SPREAD_SPEED = 18;
 const BALTTATO_SUPERPOSITION_COLOR = "#60a5fa";
 
 function balttatoExtraChoiceChance(player) {
   const luck = Math.max(0, Number(player && player.luck) || 0);
+  const extraChoiceCap = 0.50;
+  const extraChoiceLuckCurve = 0.20;
   return Math.min(
-    BALTTATO_EXTRA_CHOICE_CAP,
-    BALTTATO_EXTRA_CHOICE_CAP * (1 - Math.exp(-BALTTATO_EXTRA_CHOICE_LUCK_CURVE * luck))
+    extraChoiceCap,
+    extraChoiceCap * (1 - Math.exp(-extraChoiceLuckCurve * luck))
   );
 }
 
