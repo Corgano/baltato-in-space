@@ -75,8 +75,8 @@ UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
 };
 
 const balttatoOriginalReadableGenerateOfferings = UpgradeManager.prototype.generateOfferings;
-UpgradeManager.prototype.generateOfferings = function(forceJoker = false) {
-  const cards = balttatoOriginalReadableGenerateOfferings.call(this, forceJoker);
+UpgradeManager.prototype.generateOfferings = function(forceJoker = false, player = null) {
+  const cards = balttatoOriginalReadableGenerateOfferings.call(this, forceJoker, player);
   const statText = {
     chain_hits: "Stats: Chain Hits +1",
     multishot: "Stats: Multishot +1",
