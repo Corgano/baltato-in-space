@@ -10,8 +10,40 @@ const BALTTATO_RUN_STATE_MAX_AGE = 60 * 60 * 24 * 7;
 function balttatoSetRunStateCookie(game) {
   if (!game || game.state !== "LEVEL_UP") return;
 
+  const player = game.player;
   const snapshot = {
-    player: game.player,
+    player: {
+      x: player.x,
+      y: player.y,
+      health: player.health,
+      maxHealth: player.maxHealth,
+      speed: player.speed,
+      armor: player.armor,
+      fireInterval: player.fireInterval,
+      fireRatePercent: player.fireRatePercent,
+      damage: player.damage,
+      projectileSpeed: player.projectileSpeed,
+      weaponRange: player.weaponRange,
+      multishotCount: player.multishotCount,
+      pierceCount: player.pierceCount,
+      critChance: player.critChance,
+      critMultiplier: player.critMultiplier,
+      chainHits: player.chainHits,
+      chainRange: player.chainRange,
+      ricochetCount: player.ricochetCount,
+      hasExplosiveBlast: player.hasExplosiveBlast,
+      blastRadius: player.blastRadius,
+      lifeLeechChance: player.lifeLeechChance,
+      fragmentation: player.fragmentation,
+      luck: player.luck,
+      magnetRadius: player.magnetRadius,
+      hasSnailMailJoker: player.hasSnailMailJoker,
+      hasSuperpositionJoker: player.hasSuperpositionJoker,
+      boostCapacity: player.boostCapacity,
+      boost: player.boost,
+      acquiredUpgrades: player.acquiredUpgrades,
+      acquiredJokers: (player.acquiredJokers || []).map((joker) => joker.id)
+    },
     playerLevel: game.playerLevel,
     currentXp: game.currentXp,
     xpThreshold: game.xpThreshold,
@@ -20,7 +52,10 @@ function balttatoSetRunStateCookie(game) {
     rerollTokens: game.rerollTokens || 0,
     bossTier: game.bossTier,
     bossWarningTimer: game.bossWarningTimer,
-    activeCards: game.upgradeManager.activeCards
+    activeCards: game.upgradeManager.activeCards.map((card) => ({
+      id: card.id,
+      isJoker: !!card.isJoker
+    }))
   };
 
   try {
@@ -33,7 +68,8 @@ function balttatoSetRunStateCookie(game) {
     document.cookie = `${BALTTATO_RUN_STATE_COOKIE}=${encoded}; max-age=${BALTTATO_RUN_STATE_MAX_AGE}; path=/; SameSite=Lax`;
     logDebug(1, "Upgrade-state checkpoint saved", {
       level: game.playerLevel,
-      choices: game.upgradeManager.activeCards.length
+      choices: game.upgradeManager.activeCards.length,
+      size: encoded.length
     });
   } catch (err) {
     logDebug(0, "Unable to save upgrade-state checkpoint", err);
@@ -70,6 +106,26 @@ function balttatoRestoreRunState(game) {
 
   try {
     Object.assign(game.player, snapshot.player);
+
+    const restoredJokers = [];
+    for (let i = 0; i < snapshot.player.acquiredJokers.length; i++) {
+      const jokerId = snapshot.player.acquiredJokers[i];
+      const joker = game.upgradeManager.jokerCatalog.find((card) => card.id === jokerId);
+      if (joker) restoredJokers.push({ ...joker });
+    }
+    game.player.acquiredJokers = restoredJokers;
+
+    const restoredCards = [];
+    for (let i = 0; i < snapshot.activeCards.length; i++) {
+      const savedCard = snapshot.activeCards[i];
+      const catalog = savedCard.isJoker ? game.upgradeManager.jokerCatalog : game.upgradeManager.upgradeCatalog;
+      const card = catalog.find((entry) => entry.id === savedCard.id);
+      if (card) restoredCards.push({ ...card });
+    }
+    if (restoredCards.length !== snapshot.activeCards.length) {
+      throw new Error("One or more saved upgrade cards could not be restored");
+    }
+
     game.playerLevel = Number.isFinite(snapshot.playerLevel) ? snapshot.playerLevel : game.playerLevel;
     game.currentXp = Number.isFinite(snapshot.currentXp) ? snapshot.currentXp : game.currentXp;
     game.xpThreshold = Number.isFinite(snapshot.xpThreshold) ? snapshot.xpThreshold : game.xpThreshold;
@@ -78,7 +134,7 @@ function balttatoRestoreRunState(game) {
     game.rerollTokens = Number.isFinite(snapshot.rerollTokens) ? snapshot.rerollTokens : 0;
     game.bossTier = Number.isFinite(snapshot.bossTier) ? snapshot.bossTier : game.bossTier;
     game.bossWarningTimer = Number.isFinite(snapshot.bossWarningTimer) ? snapshot.bossWarningTimer : 0;
-    game.upgradeManager.activeCards = snapshot.activeCards;
+    game.upgradeManager.activeCards = restoredCards;
     game.upgradeManager.hoveredCardIndex = -1;
     game.cardBurn = { active: false, cardIndex: -1, progress: 0, embers: [], pendingCard: null };
     game.state = "LEVEL_UP";
