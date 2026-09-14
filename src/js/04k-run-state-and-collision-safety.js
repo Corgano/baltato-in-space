@@ -6,6 +6,19 @@
 
 const BALTTATO_RUN_STATE_COOKIE = "balttato_run_state";
 const BALTTATO_RUN_STATE_MAX_AGE = 60 * 60 * 24 * 7;
+const BALTTATO_EXTRA_CHOICE_CAP = 0.50;
+const BALTTATO_EXTRA_CHOICE_LUCK_CURVE = 0.20;
+const BALTTATO_SUPERPOSITION_INITIAL_OFFSET = 7.5;
+const BALTTATO_SUPERPOSITION_SPREAD_SPEED = 18;
+const BALTTATO_SUPERPOSITION_COLOR = "#60a5fa";
+
+function balttatoExtraChoiceChance(player) {
+  const luck = Math.max(0, Number(player && player.luck) || 0);
+  return Math.min(
+    BALTTATO_EXTRA_CHOICE_CAP,
+    BALTTATO_EXTRA_CHOICE_CAP * (1 - Math.exp(-BALTTATO_EXTRA_CHOICE_LUCK_CURVE * luck))
+  );
+}
 
 function balttatoSetRunStateCookie(game) {
   if (!game || game.state !== "LEVEL_UP") return;
@@ -108,8 +121,9 @@ function balttatoRestoreRunState(game) {
     Object.assign(game.player, snapshot.player);
 
     const restoredJokers = [];
-    for (let i = 0; i < snapshot.player.acquiredJokers.length; i++) {
-      const jokerId = snapshot.player.acquiredJokers[i];
+    const savedJokers = Array.isArray(snapshot.player.acquiredJokers) ? snapshot.player.acquiredJokers : [];
+    for (let i = 0; i < savedJokers.length; i++) {
+      const jokerId = savedJokers[i];
       const joker = game.upgradeManager.jokerCatalog.find((card) => card.id === jokerId);
       if (joker) restoredJokers.push({ ...joker });
     }
@@ -190,6 +204,58 @@ GameManager.prototype.restartGame = function() {
   return balttatoOriginalRestartGameRunState.call(this);
 };
 
+const balttatoOriginalHandleAutoCombatRunState = GameManager.prototype.handleAutoCombat;
+GameManager.prototype.handleAutoCombat = function(dt) {
+  const projectileCountBefore = this.projectiles.length;
+  balttatoOriginalHandleAutoCombatRunState.call(this, dt);
+
+  if (!this.player.hasSuperpositionJoker) return;
+
+  const newProjectiles = this.projectiles.slice(projectileCountBefore);
+  const pairs = new Map();
+  for (let i = 0; i < newProjectiles.length; i++) {
+    const projectile = newProjectiles[i];
+    if (!projectile.superpositionPairId) continue;
+    if (!pairs.has(projectile.superpositionPairId)) pairs.set(projectile.superpositionPairId, []);
+    pairs.get(projectile.superpositionPairId).push(projectile);
+  }
+
+  for (const pair of pairs.values()) {
+    if (pair.length !== 2) continue;
+
+    for (let i = 0; i < pair.length; i++) {
+      const projectile = pair[i];
+      const speed = Math.hypot(projectile.vx, projectile.vy);
+      if (speed <= 0) continue;
+
+      const perpX = -projectile.vy / speed;
+      const perpY = projectile.vx / speed;
+      const side = i === 0 ? -1 : 1;
+      projectile.x += perpX * BALTTATO_SUPERPOSITION_INITIAL_OFFSET * side;
+      projectile.y += perpY * BALTTATO_SUPERPOSITION_INITIAL_OFFSET * side;
+      projectile.superpositionSpreadVx = perpX * BALTTATO_SUPERPOSITION_SPREAD_SPEED * side;
+      projectile.superpositionSpreadVy = perpY * BALTTATO_SUPERPOSITION_SPREAD_SPEED * side;
+      projectile.superpositionOriginalColor = projectile.color;
+      projectile.color = BALTTATO_SUPERPOSITION_COLOR;
+    }
+
+    logDebug(3, "Superposition pair separated at launch", {
+      pairId: pair[0].superpositionPairId,
+      initialSpacing: BALTTATO_SUPERPOSITION_INITIAL_OFFSET * 2,
+      spreadSpeed: BALTTATO_SUPERPOSITION_SPREAD_SPEED
+    });
+  }
+};
+
+const balttatoOriginalProjectileUpdateRunState = Projectile.prototype.update;
+Projectile.prototype.update = function(dt, arenaWidth = 800, arenaHeight = 600) {
+  if (this.superpositionPairId && !this.superpositionResolved) {
+    this.vx += (this.superpositionSpreadVx || 0) * dt;
+    this.vy += (this.superpositionSpreadVy || 0) * dt;
+  }
+  return balttatoOriginalProjectileUpdateRunState.call(this, dt, arenaWidth, arenaHeight);
+};
+
 /*
  * Several gameplay layers wrap checkCollisions. A collision can trigger an
  * enemy defeat, which can trigger additional effects that reach the collision
@@ -203,12 +269,24 @@ GameManager.prototype.checkCollisions = function() {
     return;
   }
 
+  const superpositionProjectiles = [];
+  for (let i = 0; i < this.projectiles.length; i++) {
+    const projectile = this.projectiles[i];
+    if (projectile.superpositionResolved && projectile.superpositionOriginalColor) {
+      superpositionProjectiles.push(projectile);
+    }
+  }
+
   this.__balttatoCollisionCheckActive = true;
   try {
     return balttatoCollisionWrapperBeforeSafety.call(this);
   } finally {
     this.__balttatoCollisionCheckActive = false;
+    for (let i = 0; i < superpositionProjectiles.length; i++) {
+      const projectile = superpositionProjectiles[i];
+      if (!projectile.superpositionPairId) projectile.color = projectile.superpositionOriginalColor;
+    }
   }
 };
 
-logDebug(1, "Run-state persistence and collision re-entry safety enabled");
+logDebug(1, "Run-state persistence, Luck scaling, Superposition spacing, and collision re-entry safety enabled");
