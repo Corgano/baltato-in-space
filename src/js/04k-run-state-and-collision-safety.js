@@ -247,13 +247,75 @@ GameManager.prototype.handleAutoCombat = function(dt) {
   }
 };
 
+function balttatoResolveSuperpositionBoundary(projectile, arenaWidth, arenaHeight, bouncedX, bouncedY) {
+  if (!projectile.superpositionPairId || projectile.superpositionResolved) return false;
+
+  const twin = projectile.twin;
+  const pairId = projectile.superpositionPairId;
+  const realProjectile = Math.random() < 0.5 ? projectile : twin;
+  const fakeProjectile = realProjectile === projectile ? twin : projectile;
+  if (!realProjectile) return false;
+
+  projectile.superpositionResolved = true;
+  projectile.superpositionPairId = null;
+  projectile.twin = null;
+
+  if (twin) {
+    twin.superpositionResolved = true;
+    twin.superpositionPairId = null;
+    twin.twin = null;
+  }
+
+  if (fakeProjectile) {
+    fakeProjectile.isDestroyed = true;
+  }
+
+  // The boundary is the measurement point. The surviving real projectile
+  // is the one that gets the physical ricochet response. If the twin was
+  // selected as real, reflect it using the wall(s) that caused the pair to
+  // collapse, so it is sent back into the arena from the measurement event.
+  if (bouncedX) realProjectile.vx = -realProjectile.vx;
+  if (bouncedY) realProjectile.vy = -realProjectile.vy;
+
+  if (realProjectile.x < realProjectile.radius) realProjectile.x = realProjectile.radius;
+  if (realProjectile.x > arenaWidth - realProjectile.radius) realProjectile.x = arenaWidth - realProjectile.radius;
+  if (realProjectile.y < realProjectile.radius) realProjectile.y = realProjectile.radius;
+  if (realProjectile.y > arenaHeight - realProjectile.radius) realProjectile.y = arenaHeight - realProjectile.radius;
+
+  realProjectile.superpositionOriginalColor = realProjectile.superpositionOriginalColor || realProjectile.color;
+  realProjectile.color = realProjectile.superpositionOriginalColor;
+
+  logDebug(3, "Superposition collapsed at ricochet boundary", {
+    pairId,
+    real: realProjectile === projectile ? "boundary projectile" : "twin projectile",
+    fakeDestroyed: !!fakeProjectile,
+    bouncedX,
+    bouncedY
+  });
+  return true;
+}
+
 const balttatoOriginalProjectileUpdateRunState = Projectile.prototype.update;
 Projectile.prototype.update = function(dt, arenaWidth = 800, arenaHeight = 600) {
+  const beforeX = this.x;
+  const beforeY = this.y;
+  const beforeVx = this.vx;
+  const beforeVy = this.vy;
+  const beforeRicochet = this.ricochetRemaining;
+
   if (this.superpositionPairId && !this.superpositionResolved) {
     this.vx += (this.superpositionSpreadVx || 0) * dt;
     this.vy += (this.superpositionSpreadVy || 0) * dt;
   }
-  return balttatoOriginalProjectileUpdateRunState.call(this, dt, arenaWidth, arenaHeight);
+  const result = balttatoOriginalProjectileUpdateRunState.call(this, dt, arenaWidth, arenaHeight);
+
+  if (this.superpositionPairId && !this.superpositionResolved && this.ricochetRemaining < beforeRicochet) {
+    const bouncedX = Math.sign(this.vx) !== Math.sign(beforeVx) && Math.abs(this.x - Math.max(this.radius, Math.min(arenaWidth - this.radius, this.x))) < 0.001;
+    const bouncedY = Math.sign(this.vy) !== Math.sign(beforeVy) && Math.abs(this.y - Math.max(this.radius, Math.min(arenaHeight - this.radius, this.y))) < 0.001;
+    balttatoResolveSuperpositionBoundary(this, arenaWidth, arenaHeight, bouncedX, bouncedY);
+  }
+
+  return result;
 };
 
 /*
@@ -289,4 +351,4 @@ GameManager.prototype.checkCollisions = function() {
   }
 };
 
-logDebug(1, "Run-state persistence, Luck scaling, Superposition spacing, and collision re-entry safety enabled");
+logDebug(1, "Run-state persistence, Luck scaling, Superposition spacing, boundary collapse, and collision re-entry safety enabled");
