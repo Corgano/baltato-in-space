@@ -1,9 +1,9 @@
 /*
- * Runtime rendering safety and version 1.7.8.
+ * Runtime rendering safety and version 1.7.9.
  * Prevents malformed entity radii from stopping the animation loop.
  */
 
-const BALTTATO_RUNTIME_VERSION = "1.7.8";
+const BALTTATO_RUNTIME_VERSION = "1.7.9";
 
 function balttatoSanitizeDrawRadius(value, fallback, label) {
   const numeric = Number(value);
@@ -40,7 +40,6 @@ BossEnemy.prototype.draw = function(ctx) {
 const balttatoOriginalProjectileDrawSafety = Projectile.prototype.draw;
 Projectile.prototype.draw = function(ctx) {
   this.radius = balttatoSanitizeDrawRadius(this.radius, 4.5, "Projectile.radius");
-  this.maxRange = balttatoSanitizeDrawRadius(this.maxRange, 260, "Projectile.maxRange");
   return balttatoOriginalProjectileDrawSafety.call(this, ctx);
 };
 
