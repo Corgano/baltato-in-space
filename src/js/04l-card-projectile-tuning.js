@@ -42,7 +42,7 @@ UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
   const cardCount = Math.max(1, this.activeCards.length);
   const totalW = cardW * cardCount + gap * (cardCount - 1);
   const startX = (canvasW - totalW) / 2;
-  const startY = canvasH / 2 - 108;
+  const startY = canvasH / 2 - 98;
   const rects = [];
 
   for (let i = 0; i < cardCount; i++) {
@@ -64,8 +64,45 @@ UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLev
   const rects = this.getCardLayout(canvasW, canvasH);
   for (let i = 0; i < this.activeCards.length; i++) {
     const card = this.activeCards[i];
-    if (!card.isJoker) continue;
     const r = rects[i];
+    if (!card.isJoker) {
+      const isHovered = this.hoveredCardIndex === i;
+      const oldBtnY = r.y + r.h - 34;
+      const btnW = r.w - 28;
+      const btnH = 28;
+      const btnX = r.x + 14;
+      const btnY = r.y + r.h - 40;
+
+      ctx.save();
+      ctx.fillStyle = isHovered ? "#162032" : "#0f172a";
+      ctx.fillRect(btnX - 2, oldBtnY - 2, btnW + 4, btnH + 4);
+
+      if (isHovered) {
+        ctx.shadowColor = card.rarityColor;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = card.rarityColor;
+      } else {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#1e293b";
+      }
+      drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 4);
+      ctx.fill();
+
+      if (!isHovered) {
+        ctx.strokeStyle = hexToRgba(card.rarityColor, 0.35);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.font = "bold 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillStyle = isHovered ? "#000000" : "#94a3b8";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("CHOOSE", btnX + btnW / 2, btnY + btnH / 2);
+    }
+
+    if (!card.isJoker) continue;
 
     ctx.save();
     ctx.fillStyle = "#faf5ea";
@@ -255,3 +292,16 @@ logDebug(1, "Card ratio, persistent upgrade checkpoint, Snail Mail launch, and L
   cardRatio: `${BALTTATO_CARD_BASE_WIDTH}:${BALTTATO_CARD_BASE_HEIGHT}`,
   cardSize: `${BALTTATO_CARD_WIDTH_16}x${BALTTATO_CARD_HEIGHT_16}`
 });
+
+const BALTTATO_PATCH_VERSION = "1.7.5";
+if (typeof document !== "undefined") {
+  document.title = `v${BALTTATO_PATCH_VERSION} — Canvas Arena Survivor`;
+  const versionBadge = document.getElementById("hudVersionBadge");
+  if (versionBadge) {
+    versionBadge.innerHTML = `<span class="hud-version-dot"></span>v${BALTTATO_PATCH_VERSION}`;
+  }
+  const descriptionMeta = document.querySelector('meta[name="description"]');
+  if (descriptionMeta) {
+    descriptionMeta.content = descriptionMeta.content.replace(/Version 1\.7\.4/g, `Version ${BALTTATO_PATCH_VERSION}`);
+  }
+}
