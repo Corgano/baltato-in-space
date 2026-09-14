@@ -1,9 +1,9 @@
 /*
- * Runtime rendering safety and version 1.7.10.
+ * Runtime rendering safety and version 1.7.12.
  * Prevents malformed entity radii from stopping the animation loop.
  */
 
-const BALTTATO_RUNTIME_VERSION = "1.7.10";
+const BALTTATO_RUNTIME_VERSION = "1.7.12";
 let balttatoArcGuardReported = false;
 
 function balttatoSanitizeDrawRadius(value, fallback, label) {
