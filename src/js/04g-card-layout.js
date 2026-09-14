@@ -7,6 +7,8 @@
 const BALTTATO_CARD_WIDTH = 180;
 const BALTTATO_CARD_HEIGHT = 210;
 const BALTTATO_CARD_GAP = 12;
+const BALTTATO_MAX_FIRE_RATE_PERCENT = 1000;
+const BALTTATO_MIN_FIRE_INTERVAL = 0.055;
 
 function balttatoActualCardLayout(canvasW, canvasH) {
   const cardCount = Math.max(1, this.activeCards.length);
@@ -27,6 +29,46 @@ function balttatoActualCardLayout(canvasW, canvasH) {
   return rects;
 }
 
+function balttatoDumpPlayerStats(player, upgradeTitle) {
+  const stats = {
+    upgrade: upgradeTitle,
+    x: player.x,
+    y: player.y,
+    speed: player.speed,
+    maxHealth: player.maxHealth,
+    health: player.health,
+    armor: player.armor,
+    fireRatePercent: player.fireRatePercent,
+    fireInterval: player.fireInterval,
+    damage: player.damage,
+    projectileSpeed: player.projectileSpeed,
+    weaponRange: player.weaponRange,
+    multishotCount: player.multishotCount,
+    pierceCount: player.pierceCount,
+    critChance: player.critChance,
+    critMultiplier: player.critMultiplier,
+    chainHits: player.chainHits,
+    chainRange: player.chainRange,
+    ricochetCount: player.ricochetCount,
+    blastRadius: player.blastRadius,
+    lifeLeechChance: player.lifeLeechChance,
+    fragmentation: player.fragmentation,
+    luck: player.luck,
+    magnetRadius: player.magnetRadius,
+    hasExplosiveBlast: player.hasExplosiveBlast,
+    hasSnailMailJoker: player.hasSnailMailJoker,
+    hasSuperpositionJoker: player.hasSuperpositionJoker
+  };
+
+  console.info("[UPGRADE STATS DUMP]", stats);
+
+  const numericStats = Object.entries(stats).filter(([key, value]) => key !== "upgrade" && typeof value === "number");
+  const invalidStats = numericStats.filter(([, value]) => !Number.isFinite(value));
+  if (invalidStats.length > 0) {
+    console.error("[UPGRADE STATS ERROR] Non-finite player stat detected", invalidStats);
+  }
+}
+
 UpgradeManager.prototype.getCardLayout = function(canvasW, canvasH) {
   return balttatoActualCardLayout.call(this, canvasW, canvasH);
 };
@@ -39,22 +81,22 @@ UpgradeManager.prototype.generateOfferings = function(forceJoker = false) {
     multishot: "Stats: Multishot +1",
     overclock_speed: "Stats: Speed +25",
     ricochet: "Stats: Ricochet +1",
-    explosive_rounds: "Stats: Blast Radius +15 | Max 85",
+    explosive_rounds: "Stats: Blast Radius +15\nMax 85",
     nanite_siphon: "Stats: Life Leech Chance +15%",
-    attack_speed: "Stats: Fire Interval -18%",
+    attack_speed: "Stats: Fire Rate +20%",
     heavy_ordnance: "Stats: Damage +12",
     piercing_rounds: "Stats: Penetration +1",
-    vital_bulk: "Stats: Max Health +30 | Heal +40",
+    vital_bulk: "Stats: Max Health +30\nHeal +40",
     energy_shield: "Stats: Armor +3",
     vacuum_funnel: "Stats: Magnet Radius +70",
-    crit_overcharge: "Stats: Crit Chance +15% | Crit Multiplier 2.5x",
+    crit_overcharge: "Stats: Crit Chance +15%\nCrit Multiplier 2.5x",
     targeting_sensor: "Stats: Weapon Range +22% scaling",
-    focal_array: "Stats: Damage +6 | Weapon Range +30% scaling",
+    focal_array: "Stats: Damage +6\nWeapon Range +30% scaling",
     accelerator_coils: "Stats: Projectile Speed +20%",
-    hypervelocity_cores: "Stats: Projectile Speed +35% | Range +18% scaling",
+    hypervelocity_cores: "Stats: Projectile Speed +35%\nRange +18% scaling",
     lucky_charm: "Stats: Luck +1",
     shrapnel_casing: "Stats: Fragmentation +2",
-    cluster_munitions: "Stats: Fragmentation +3 | Projectile Speed +15%"
+    cluster_munitions: "Stats: Fragmentation +3\nProjectile Speed +15%"
   };
 
   for (const card of cards) {
@@ -64,6 +106,48 @@ UpgradeManager.prototype.generateOfferings = function(forceJoker = false) {
   }
 
   return cards;
+};
+
+const balttatoOriginalApplyUpgrade = UpgradeManager.prototype.applyUpgrade;
+UpgradeManager.prototype.applyUpgrade = function(index, player) {
+  if (index >= 0 && index < this.activeCards.length) {
+    const upgrade = this.activeCards[index];
+    if (upgrade && upgrade.id === "attack_speed") {
+      const currentRatePercent = Number.isFinite(player.fireRatePercent)
+        ? player.fireRatePercent
+        : Math.min(
+            BALTTATO_MAX_FIRE_RATE_PERCENT,
+            Math.max(100, Math.round((0.55 / Math.max(BALTTATO_MIN_FIRE_INTERVAL, player.fireInterval)) * 100))
+          );
+      player.fireRatePercent = Math.min(
+        BALTTATO_MAX_FIRE_RATE_PERCENT,
+        currentRatePercent + 20
+      );
+      player.fireInterval = Math.max(
+        BALTTATO_MIN_FIRE_INTERVAL,
+        0.55 * (100 / player.fireRatePercent)
+      );
+      if (!Number.isFinite(player.fireInterval)) {
+        player.fireRatePercent = 100;
+        player.fireInterval = 0.55;
+      }
+      logDebug(1, "Upgrade applied: RAPID CYCLER", {
+        fireRatePercent: player.fireRatePercent,
+        newInterval: player.fireInterval
+      });
+    } else {
+      const applied = balttatoOriginalApplyUpgrade.call(this, index, player);
+      if (!applied) return false;
+      balttatoDumpPlayerStats(player, upgrade.title);
+      return true;
+    }
+
+    if (!player.acquiredUpgrades) player.acquiredUpgrades = [];
+    player.acquiredUpgrades.push(upgrade.title);
+    balttatoDumpPlayerStats(player, upgrade.title);
+    return true;
+  }
+  return false;
 };
 
 // The base GameManager hotkey handler only exposes keys 1-3. Add the fourth
