@@ -7,6 +7,7 @@
 const BALTTATO_CARD_WIDTH = 180;
 const BALTTATO_CARD_HEIGHT = 210;
 const BALTTATO_CARD_GAP = 12;
+const BALTTATO_BASE_FIRE_INTERVAL = 0.55;
 const BALTTATO_MAX_FIRE_RATE_PERCENT = 1000;
 const BALTTATO_MIN_FIRE_INTERVAL = 0.055;
 
@@ -113,23 +114,26 @@ UpgradeManager.prototype.applyUpgrade = function(index, player) {
   if (index >= 0 && index < this.activeCards.length) {
     const upgrade = this.activeCards[index];
     if (upgrade && upgrade.id === "attack_speed") {
-      const currentRatePercent = Number.isFinite(player.fireRatePercent)
-        ? player.fireRatePercent
-        : Math.min(
-            BALTTATO_MAX_FIRE_RATE_PERCENT,
-            Math.max(100, Math.round((0.55 / Math.max(BALTTATO_MIN_FIRE_INTERVAL, player.fireInterval)) * 100))
-          );
+      const currentRatePercent = Math.min(
+        BALTTATO_MAX_FIRE_RATE_PERCENT,
+        Math.max(
+          100,
+          Math.round(
+            (BALTTATO_BASE_FIRE_INTERVAL / Math.max(BALTTATO_MIN_FIRE_INTERVAL, player.fireInterval)) * 100
+          )
+        )
+      );
       player.fireRatePercent = Math.min(
         BALTTATO_MAX_FIRE_RATE_PERCENT,
         currentRatePercent + 20
       );
       player.fireInterval = Math.max(
         BALTTATO_MIN_FIRE_INTERVAL,
-        0.55 * (100 / player.fireRatePercent)
+        BALTTATO_BASE_FIRE_INTERVAL * (100 / player.fireRatePercent)
       );
       if (!Number.isFinite(player.fireInterval)) {
         player.fireRatePercent = 100;
-        player.fireInterval = 0.55;
+        player.fireInterval = BALTTATO_BASE_FIRE_INTERVAL;
       }
       logDebug(1, "Upgrade applied: RAPID CYCLER", {
         fireRatePercent: player.fireRatePercent,
