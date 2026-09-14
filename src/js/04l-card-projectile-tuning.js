@@ -90,6 +90,17 @@ UpgradeManager.prototype.drawOverlay = function(ctx, canvasW, canvasH, playerLev
     ctx.font = "bold 9px monospace";
     ctx.textAlign = "left";
     ctx.fillText(card.title.toUpperCase(), r.x + 12, r.y + 31);
+
+    ctx.fillStyle = "#faf5ea";
+    ctx.fillRect(r.x + r.w - 54, r.y + r.h - 35, 42, 29);
+    ctx.save();
+    ctx.translate(r.x + r.w - 12, r.y + r.h - 11);
+    ctx.rotate(Math.PI);
+    ctx.font = "bold 11px monospace";
+    ctx.textAlign = "right";
+    ctx.fillStyle = card.rarityColor;
+    ctx.fillText("JOKER", 0, 0);
+    ctx.restore();
     ctx.restore();
   }
 };
@@ -178,6 +189,13 @@ GameManager.prototype.finalizeCardSelection = function(index) {
   }
 
   return result;
+};
+
+const balttatoOriginalInitJokerPresentation = GameManager.prototype.init;
+GameManager.prototype.init = function() {
+  balttatoOriginalInitJokerPresentation.call(this);
+  const snailMail = this.upgradeManager.jokerCatalog.find((card) => card.id === "joker_snail_mail");
+  if (snailMail) snailMail.description = "It'll get there eventually";
 };
 
 const balttatoOriginalHandleAutoCombatProjectileTuning = GameManager.prototype.handleAutoCombat;
